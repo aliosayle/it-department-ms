@@ -311,7 +311,8 @@ else
   npm install
 fi
 
-log_info "Running npm run build (Vite production bundle)…"
+log_info "Running npm run build (Vite production bundle) with VITE_API_BASE_URL=/api/v1 (nginx proxy)…"
+export VITE_API_BASE_URL="${VITE_API_BASE_URL:-/api/v1}"
 npm run build
 log_info "SPA build finished; artifacts in dist/."
 

@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { isLiveApi } from '@/api/config'
+import { apiBaseUrl, isLiveApi } from '@/api/config'
 import { PORTAL_AUTH_CHANGED_EVENT, getAccessToken } from '@/api/session'
 import { queryClient } from '@/lib/queryClient'
 import {
@@ -29,8 +29,7 @@ const emptySnapshot: StoreState = {
 }
 
 async function fetchBootstrap(): Promise<StoreState> {
-  const base = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '')
-  if (!base) throw new Error('VITE_API_BASE_URL is not set')
+  const base = apiBaseUrl()
   const token = getAccessToken()
   const res = await fetch(`${base}/bootstrap`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},

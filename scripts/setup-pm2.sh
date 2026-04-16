@@ -10,13 +10,14 @@
 #
 # Env (optional):
 #   SKIP_PM2_INSTALL=1     Do not run npm install -g pm2 when pm2 is missing
-#   BOOTSTRAP_DB=1        Create MariaDB database + app user from backend/.env (needs sudo mysql)
-#   RUN_MIGRATE=1         Implies BOOTSTRAP_DB unless BOOTSTRAP_DB=0 — then run npm run migrate
+#   RUN_MIGRATE=0         Skip MariaDB bootstrap + npm run migrate (default is RUN_MIGRATE=1)
+#   BOOTSTRAP_DB=0        With RUN_MIGRATE=1, skip CREATE DATABASE / USER (DB already exists)
+#   BOOTSTRAP_DB=1        Only create DB+user, do not migrate (use with RUN_MIGRATE=0 if you want)
 #   RUN_SEED=1            Run backend seed (needs SEED_SUPERADMIN_PASSWORD or .credentials-portal.env)
 #   VITE_API_BASE_URL      SPA build API base; default: http://<first LAN IP>:4000/api/v1
 #
-# First-time DB + schema + seed (typical):
-#   RUN_MIGRATE=1 RUN_SEED=1 SEED_SUPERADMIN_PASSWORD='…' ./scripts/setup-pm2.sh
+# Default: creates DB+user (sudo mysql), applies schema, builds, starts PM2. Seed is still opt-in:
+#   RUN_SEED=1 SEED_SUPERADMIN_PASSWORD='…' ./scripts/setup-pm2.sh
 # =============================================================================
 set -euo pipefail
 
@@ -131,6 +132,9 @@ if [[ ! -f "$REPO_ROOT/backend/.env" ]]; then
     die "missing backend/.env and backend/.env.example"
   fi
 fi
+
+# Default: migrate (and MariaDB bootstrap) so fresh MariaDB gets it_department without extra flags.
+RUN_MIGRATE="${RUN_MIGRATE:-1}"
 
 # --- Dependencies ------------------------------------------------------------
 if [[ -f "$REPO_ROOT/package-lock.json" ]]; then

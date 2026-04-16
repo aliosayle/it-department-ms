@@ -8,6 +8,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // DevExtreme + app bundle exceeds default 500 kB warning; split later with route-level dynamic import().
+    chunkSizeWarningLimit: 2800,
+  },
   // Listen on all addresses (e.g. 0.0.0.0) so other machines on the LAN can open the dev URL.
   server: {
     host: true,

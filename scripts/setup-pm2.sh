@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Full rebuild + PM2 (API + SPA preview) — Linux (macOS: set VITE_API_BASE_URL; no hostname -I)
+#
+# After: git reset --hard && git pull
+#   chmod +x scripts/setup-pm2.sh
+#   ./scripts/setup-pm2.sh
+#
+# Prerequisites: Node 20+, MariaDB running if you use migrate/seed.
+#
+# Env (optional):
+#   SKIP_PM2_INSTALL=1     Do not run npm install -g pm2 when pm2 is missing
+#   RUN_MIGRATE=1          Run backend migrate (needs backend/.env)
+#   RUN_SEED=1             Run backend seed (needs SEED_SUPERADMIN_PASSWORD or .credentials-portal.env)
+#   VITE_API_BASE_URL      SPA build API base; default: http://<first LAN IP>:4000/api/v1
+# =============================================================================
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+log() { echo "[pm2-setup] $*"; }
+
+find_repo_root() {
+  local start="${1:-.}"
+  local dir
+  dir="$(cd "$start" && pwd -P)"
+  while [[ "$dir" != "/" ]]; do
+    if [[ -f "$dir/package.json" ]] && [[ -d "$dir/src" ]] && [[ -f "$dir/vite.config.ts" ]]; then
+      echo "$dir"
+      return 0
+    fi
+    dir="$(dirname "$dir")"
+  done
+  return 1
+}
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd -P)"
+REPO_ROOT=""
+if tmp="$(find_repo_root "$(pwd)")"; then
+  REPO_ROOT="$tmp"
+elif tmp="$(find_repo_root "$SCRIPT_DIR/..")"; then
+  REPO_ROOT="$tmp"
+else
+  die "could not find repo root (package.json + src/ + vite.config.ts). cd into the clone and retry."
+fi
+
+cd "$REPO_ROOT"
+log "Repository root: $REPO_ROOT"
+
+command -v node >/dev/null 2>&1 || die "node is not on PATH"
+command -v npm >/dev/null 2>&1 || die "npm is not on PATH"
+
+PM2_CMD=(npx --yes pm2)
+if command -v pm2 >/dev/null 2>&1; then
+  PM2_CMD=(pm2)
+elif [[ "${SKIP_PM2_INSTALL:-0}" != "1" ]]; then
+  log "Installing pm2 globally (set SKIP_PM2_INSTALL=1 to skip and install pm2 yourself)…"
+  npm install -g pm2
+  PM2_CMD=(pm2)
+else
+  log "Using npx pm2 (install global pm2 for a cleaner PATH: npm i -g pm2)"
+fi
+
+# Default API URL for SPA build: same machine, LAN IP so other PCs can use the UI
+LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+if [[ -z "${LAN_IP:-}" ]]; then
+  LAN_IP="127.0.0.1"
+fi
+export VITE_API_BASE_URL="${VITE_API_BASE_URL:-http://${LAN_IP}:4000/api/v1}"
+log "VITE_API_BASE_URL for this build: $VITE_API_BASE_URL (override if needed)"
+
+# --- Backend env ------------------------------------------------------------
+if [[ ! -f "$REPO_ROOT/backend/.env" ]]; then
+  if [[ -f "$REPO_ROOT/backend/.env.example" ]]; then
+    cp "$REPO_ROOT/backend/.env.example" "$REPO_ROOT/backend/.env"
+    log "Created backend/.env from .env.example — edit DATABASE_* and JWT_SECRET before RUN_MIGRATE=1."
+  else
+    die "missing backend/.env and backend/.env.example"
+  fi
+fi
+
+# --- Dependencies ------------------------------------------------------------
+if [[ -f "$REPO_ROOT/package-lock.json" ]]; then
+  log "npm ci (repo root)…"
+  npm ci
+else
+  log "npm install (repo root, no lockfile)…"
+  npm install
+fi
+
+if [[ -f "$REPO_ROOT/backend/package-lock.json" ]]; then
+  log "npm ci (backend)…"
+  (cd "$REPO_ROOT/backend" && npm ci)
+else
+  log "npm install (backend, no lockfile)…"
+  (cd "$REPO_ROOT/backend" && npm install)
+fi
+
+# --- Optional DB migrate / seed ---------------------------------------------
+if [[ "${RUN_MIGRATE:-0}" == "1" ]]; then
+  log "RUN_MIGRATE=1 — npm run migrate in backend/…"
+  (cd "$REPO_ROOT/backend" && npm run migrate)
+fi
+
+if [[ "${RUN_SEED:-0}" == "1" ]]; then
+  SEED_PW="${SEED_SUPERADMIN_PASSWORD:-}"
+  if [[ -z "$SEED_PW" ]] && [[ -f "$REPO_ROOT/.credentials-portal.env" ]]; then
+    SEED_PW="$(grep '^PORTAL_SUPERADMIN_PASSWORD=' "$REPO_ROOT/.credentials-portal.env" | cut -d= -f2- || true)"
+  fi
+  [[ -n "$SEED_PW" ]] || die "RUN_SEED=1 requires SEED_SUPERADMIN_PASSWORD or .credentials-portal.env with PORTAL_SUPERADMIN_PASSWORD="
+  SEED_LOGIN="${SEED_SUPERADMIN_LOGIN:-superadmin}"
+  log "RUN_SEED=1 — npm run seed (login=$SEED_LOGIN)…"
+  (cd "$REPO_ROOT/backend" && SEED_SUPERADMIN_LOGIN="$SEED_LOGIN" SEED_SUPERADMIN_PASSWORD="$SEED_PW" npm run seed)
+fi
+
+# --- Builds -----------------------------------------------------------------
+log "backend: npm run build…"
+(cd "$REPO_ROOT/backend" && npm run build)
+
+[[ -f "$REPO_ROOT/backend/dist/index.js" ]] || die "backend build missing dist/index.js"
+
+log "frontend: npm run build…"
+npm run build
+
+[[ -f "$REPO_ROOT/dist/index.html" ]] || die "frontend build missing dist/index.html"
+
+# --- PM2 --------------------------------------------------------------------
+ECO="$REPO_ROOT/ecosystem.config.cjs"
+[[ -f "$ECO" ]] || die "missing ecosystem.config.cjs at repo root"
+
+"${PM2_CMD[@]}" delete it-department-api 2>/dev/null || true
+"${PM2_CMD[@]}" delete it-department-spa 2>/dev/null || true
+
+log "pm2 start $ECO …"
+"${PM2_CMD[@]}" start "$ECO"
+
+log "Done. URLs:"
+log "  API (health):  http://${LAN_IP}:4000/health"
+log "  SPA (preview): http://${LAN_IP}:4173/"
+log "  Ensure backend CORS allows this SPA origin (e.g. CORS_ORIGIN=* in backend/.env) if the browser blocks requests."
+log "  pm2 logs | pm2 status | pm2 restart all | pm2 save && pm2 startup (boot persistence)"

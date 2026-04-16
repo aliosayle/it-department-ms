@@ -22,7 +22,15 @@ npm run migrate
 SEED_SUPERADMIN_LOGIN=superadmin SEED_SUPERADMIN_PASSWORD='your-secure-password' npm run seed
 ```
 
-## 2. API (systemd)
+## 2. API (systemd or PM2)
+
+### PM2 (nginx static SPA, no systemd unit)
+
+1. From the repo clone (as a non-root user with `sudo`): **`./scripts/clean-install-nginx-pm2.sh`** — wipes the app database, prompts for portal login/password, removes any **`it-department-api.service`** unit if present, configures nginx, starts **`it-department-api`** via PM2 (`ecosystem.api-only.cjs`).
+2. After `git pull`: **`./scripts/update-pm2-app.sh`** (rebuilds, syncs `dist/` to **`WEB_ROOT`**, **`pm2 restart it-department-api`**).
+3. Persist PM2 across reboots once: **`pm2 save`** then **`pm2 startup`** (run the command it prints).
+
+### systemd (default Ubuntu script)
 
 With **`INSTALL_NGINX=1`** (default), **`scripts/setup-ubuntu.sh`** already runs **`npm run build`** in **`backend/`**, copies **`backend/.env`** to **`/etc/it-department/api.env`**, installs **`it-department-api.service`** ( **`User`/`Group`** = owner of the repo tree so a clone under `/home/...` works), enables it, and checks **`http://127.0.0.1:4000/health`**. If nginx returns **502**, the usual cause is the API not running: **`sudo systemctl status it-department-api`** and **`journalctl -u it-department-api -n 80 --no-pager`**.
 

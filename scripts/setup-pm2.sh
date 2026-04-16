@@ -164,6 +164,9 @@ fi
 if [[ "${RUN_MIGRATE:-0}" == "1" ]]; then
   log "RUN_MIGRATE=1 — npm run migrate in backend/…"
   (cd "$REPO_ROOT/backend" && npm run migrate)
+  if [[ "${RUN_SEED:-0}" != "1" ]]; then
+    log "Tip: without RUN_SEED=1 there is no portal user — /auth/login will return 401 until you seed (see .credentials-portal.env + RUN_SEED=1)."
+  fi
 fi
 
 if [[ "${RUN_SEED:-0}" == "1" ]]; then

@@ -35,7 +35,9 @@ export async function receiveStockInConn(
   conn: PoolConnection,
   input: ReceiveInput,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const q = Math.floor(Number(input.quantity))
+  const qn = Number(input.quantity)
+  if (!Number.isFinite(qn)) return { ok: false, error: 'Quantity must be a number.' }
+  const q = Math.floor(qn)
   if (q < 1) return { ok: false, error: 'Quantity must be at least 1.' }
   try {
     const [[pr]] = await conn.query<RowDataPacket[]>(
@@ -219,7 +221,9 @@ export type TransferInput = {
 }
 
 export async function transferStockTx(pool: Pool, input: TransferInput): Promise<{ ok: true } | { ok: false; error: string }> {
-  const q = Math.floor(Number(input.quantity))
+  const qn = Number(input.quantity)
+  if (!Number.isFinite(qn)) return { ok: false, error: 'Quantity must be a number.' }
+  const q = Math.floor(qn)
   if (q < 1) return { ok: false, error: 'Quantity must be at least 1.' }
   const conn = await pool.getConnection()
   try {

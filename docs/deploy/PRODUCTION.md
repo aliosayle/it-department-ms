@@ -106,7 +106,14 @@ Run **`npm run build`** (or a watch build) in another terminal; the script **rsy
 
 For HTTPS, set `server_name` and use certbot; keep the `/api/` block inside the TLS server.
 
-## 5. Smoke check
+## 5. Workflow + upload storage notes
+
+- Task attachments are stored on disk under `backend/uploads/task-attachments/` (created automatically).
+- Ensure the API service user has write permission to that directory.
+- Include this directory in backup policy together with MariaDB dumps.
+- Attachment policy (current): allowlist MIME (`pdf`, `png`, `jpeg`, `text/plain`), max payload 5MB, sanitized filenames, file mode `0600`.
+
+## 6. Smoke check
 
 With the API running:
 

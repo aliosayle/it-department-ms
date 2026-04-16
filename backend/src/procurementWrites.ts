@@ -432,9 +432,13 @@ export async function createPurchaseTx(
       return { ok: false, error: 'Issued-by personnel must belong to the purchase site.' }
     }
     for (const line of input.lines) {
-      if (Math.floor(line.quantity) < 1) {
+      if (!Number.isFinite(line.quantity) || Math.floor(line.quantity) < 1) {
         await conn.rollback()
         return { ok: false, error: 'Each line needs quantity at least 1.' }
+      }
+      if (!Number.isFinite(line.unitPrice) || Number(line.unitPrice) < 0) {
+        await conn.rollback()
+        return { ok: false, error: 'Each line needs a non-negative unit price.' }
       }
       const [[pr]] = await conn.query<RowDataPacket[]>('SELECT id FROM products WHERE id = ?', [line.productId])
       if (!pr) {

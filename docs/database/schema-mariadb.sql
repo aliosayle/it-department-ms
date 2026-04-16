@@ -56,6 +56,47 @@ CREATE TABLE IF NOT EXISTS user_page_permissions (
   CONSTRAINT fk_user_page_permissions_user FOREIGN KEY (user_id) REFERENCES portal_users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
+CREATE TABLE IF NOT EXISTS roles (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  name VARCHAR(191) NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  CONSTRAINT uq_roles_name UNIQUE (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS role_page_permissions (
+  role_id VARCHAR(64) NOT NULL,
+  page_key VARCHAR(64) NOT NULL,
+  can_view TINYINT(1) NOT NULL DEFAULT 0,
+  can_edit TINYINT(1) NOT NULL DEFAULT 0,
+  can_delete TINYINT(1) NOT NULL DEFAULT 0,
+  can_create TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (role_id, page_key),
+  CONSTRAINT fk_role_page_permissions_role FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS user_roles (
+  user_id VARCHAR(64) NOT NULL,
+  role_id VARCHAR(64) NOT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (user_id, role_id),
+  CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES portal_users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_user_roles_role FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS user_page_permission_overrides (
+  user_id VARCHAR(64) NOT NULL,
+  page_key VARCHAR(64) NOT NULL,
+  can_view TINYINT(1) NOT NULL DEFAULT 0,
+  can_edit TINYINT(1) NOT NULL DEFAULT 0,
+  can_delete TINYINT(1) NOT NULL DEFAULT 0,
+  can_create TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, page_key),
+  CONSTRAINT fk_user_overrides_user FOREIGN KEY (user_id) REFERENCES portal_users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS suppliers (
   id VARCHAR(64) NOT NULL PRIMARY KEY,
   name TEXT NOT NULL,
@@ -259,5 +300,48 @@ CREATE TABLE IF NOT EXISTS audit_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log (entity_type, entity_id, created_at DESC);
+
+
+
+CREATE TABLE IF NOT EXISTS tasks (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  status ENUM('pending_review','approved','changes_requested') NOT NULL DEFAULT 'pending_review',
+  created_by_user_id VARCHAR(64) NOT NULL,
+  assigned_to_user_id VARCHAR(64) NOT NULL,
+  reviewer_user_id VARCHAR(64) NULL,
+  due_date DATE NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  reviewed_at DATETIME(6) NULL,
+  CONSTRAINT fk_tasks_creator FOREIGN KEY (created_by_user_id) REFERENCES portal_users (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_tasks_assignee FOREIGN KEY (assigned_to_user_id) REFERENCES portal_users (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_tasks_reviewer FOREIGN KEY (reviewer_user_id) REFERENCES portal_users (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS task_attachments (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  task_id VARCHAR(64) NOT NULL,
+  uploaded_by_user_id VARCHAR(64) NOT NULL,
+  filename VARCHAR(255) NOT NULL,
+  mime_type VARCHAR(128) NOT NULL,
+  size_bytes INT NOT NULL,
+  storage_path TEXT NOT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  CONSTRAINT fk_task_attachments_task FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE,
+  CONSTRAINT fk_task_attachments_user FOREIGN KEY (uploaded_by_user_id) REFERENCES portal_users (id) ON DELETE RESTRICT,
+  CONSTRAINT chk_task_attachments_size CHECK (size_bytes >= 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS task_reviews (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  task_id VARCHAR(64) NOT NULL,
+  reviewer_user_id VARCHAR(64) NOT NULL,
+  decision ENUM('approved','changes_requested') NOT NULL,
+  comment TEXT NOT NULL DEFAULT '',
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  CONSTRAINT fk_task_reviews_task FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE,
+  CONSTRAINT fk_task_reviews_user FOREIGN KEY (reviewer_user_id) REFERENCES portal_users (id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

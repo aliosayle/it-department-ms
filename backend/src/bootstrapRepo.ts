@@ -4,11 +4,9 @@ import { jsonSafeDeep } from './jsonSafe.js'
 import {
   type PageCrud,
   type PageKey,
-  denyAll,
-  fullPermissions,
-  mergePartial,
   permissionRowsToPartial,
 } from './pageKeys.js'
+import { getEffectiveUserPermissions } from './permissionsRepo.js'
 
 function isoDate(v: unknown): string {
   if (v == null) return ''
@@ -173,6 +171,23 @@ export async function loadBootstrapSnapshot(): Promise<BootstrapSnapshot> {
   const [permRows] = await pool.query<RowDataPacket[]>(
     'SELECT user_id AS userId, page_key AS pageKey, can_view AS cv, can_edit AS ce, can_delete AS cd, can_create AS cc FROM user_page_permissions',
   )
+  const [roles] = await pool.query<RowDataPacket[]>(
+    'SELECT id, name, description, is_system AS isSystem FROM roles ORDER BY name',
+  )
+  const [rolePermRows] = await pool.query<RowDataPacket[]>(
+    'SELECT role_id AS roleId, page_key AS pageKey, can_view AS cv, can_edit AS ce, can_delete AS cd, can_create AS cc FROM role_page_permissions',
+  )
+  const [userRoles] = await pool.query<RowDataPacket[]>(
+    'SELECT user_id AS userId, role_id AS roleId FROM user_roles',
+  )
+  const [taskRows] = await pool.query<RowDataPacket[]>(
+    `SELECT id, title, description, status, created_by_user_id AS createdByUserId, assigned_to_user_id AS assignedToUserId,
+            reviewer_user_id AS reviewerUserId, due_date AS dueDate, reviewed_at AS reviewedAt, created_at AS createdAt
+     FROM tasks ORDER BY created_at DESC`,
+  )
+  const [taskAttachments] = await pool.query<RowDataPacket[]>(
+    'SELECT id, task_id AS taskId, uploaded_by_user_id AS uploadedByUserId, filename, mime_type AS mimeType, size_bytes AS sizeBytes, created_at AS createdAt FROM task_attachments ORDER BY created_at DESC',
+  )
 
   const permListsByUser = new Map<
     string,
@@ -195,23 +210,25 @@ export async function loadBootstrapSnapshot(): Promise<BootstrapSnapshot> {
     permsByUser.set(uid, permissionRowsToPartial(list))
   }
 
-  const users = usersRows.map((u) => {
+  const roleIdsByUser = new Map<string, string[]>()
+  for (const ur of userRoles) {
+    const uid = String(ur.userId)
+    const rid = String(ur.roleId)
+    if (!roleIdsByUser.has(uid)) roleIdsByUser.set(uid, [])
+    roleIdsByUser.get(uid)!.push(rid)
+  }
+
+  const users = await Promise.all(usersRows.map(async (u) => {
     const uid = String(u.id)
-    const list = permListsByUser.get(uid)
-    let permissions: Record<PageKey, PageCrud>
-    if (!list || list.length === 0) {
-      permissions = fullPermissions()
-    } else {
-      const partial = permissionRowsToPartial(list)
-      permissions = Object.keys(partial).length === 0 ? denyAll() : mergePartial(partial)
-    }
+    const permissions = await getEffectiveUserPermissions(pool, uid)
     return {
       id: u.id,
       displayName: u.displayName,
       login: u.login,
+      roleIds: roleIdsByUser.get(uid) ?? [],
       permissions,
     }
-  })
+  }))
 
   const mapAssignments = (rows: RowDataPacket[]) =>
     rows.map((r) => ({
@@ -245,29 +262,20 @@ export async function loadBootstrapSnapshot(): Promise<BootstrapSnapshot> {
     userEquipment,
     networkDevices,
     users,
+    roles,
+    rolePermissions: rolePermRows,
+    userRoles,
     suppliers,
     purchases: mapPurchases(purchases as RowDataPacket[]),
     purchaseLines,
+    tasks: taskRows.map((t) => ({ ...t, dueDate: isoDateOrNull(t.dueDate), reviewedAt: t.reviewedAt ? isoDt(t.reviewedAt) : null, createdAt: isoDt(t.createdAt) })),
+    taskAttachments: taskAttachments.map((a) => ({ ...a, createdAt: isoDt(a.createdAt) })),
   }
   return jsonSafeDeep(snapshot)
 }
 
 export async function getUserPermissions(userId: string): Promise<Record<PageKey, PageCrud>> {
-  const [rows] = await pool.query<RowDataPacket[]>(
-    'SELECT page_key AS pageKey, can_view AS cv, can_edit AS ce, can_delete AS cd, can_create AS cc FROM user_page_permissions WHERE user_id = :uid',
-    { uid: userId },
-  )
-  if (rows.length === 0) return fullPermissions()
-  const partial = permissionRowsToPartial(
-    rows.map((r) => ({
-      pageKey: String(r.pageKey),
-      view: Boolean(r.cv),
-      edit: Boolean(r.ce),
-      delete: Boolean(r.cd),
-      create: Boolean(r.cc),
-    })),
-  )
-  return Object.keys(partial).length === 0 ? denyAll() : mergePartial(partial)
+  return getEffectiveUserPermissions(pool, userId)
 }
 
 export function assertPermission(

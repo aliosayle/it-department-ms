@@ -158,6 +158,11 @@ Receive all lines (idempotent).
 | GET | `/me` | Current user and effective `PageKey` permission map |
 | POST | `/users` | Body `{ "login", "displayName", "password" }` (password min 10 chars). Requires `users` **create**. Returns `{ id, login, displayName }` with **201**. New user gets **deny-all** `user_page_permissions` rows (no implicit full access). |
 | PATCH | `/users/:id/permissions` | Body `{ "permissions": { "<pageKey>": { "view", "edit", "delete", "create" } } }`; requires `users` **edit**. **403** if `:id` is the **authenticated user’s own id** (cannot change your own permissions via the API). |
+| POST | `/roles` | Create/update role and `role_page_permissions` matrix. |
+| PATCH | `/users/:id/access` | Assign `roleIds[]` plus per-user override matrix in `user_page_permission_overrides`. |
+| POST | `/tasks` | Create review task (`pending_review`) with assignee/reviewer/due date. |
+| POST | `/tasks/:id/review` | Reviewer decision: `approved` or `changes_requested`; writes `task_reviews` and task status. |
+| POST | `/tasks/:id/attachments` | Upload attachment via JSON body `{ filename, mimeType, contentBase64 }` (safe type/size checks, max 5MB). |
 
 The SPA uses `portalCreatePortalUser` / `portalUpdatePortalUser` (`src/api/mutations.ts`) when `VITE_API_BASE_URL` is set.
 

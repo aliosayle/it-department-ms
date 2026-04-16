@@ -19,6 +19,7 @@ import {
   insertSupplier,
   replaceUserPermissions,
 } from './masterDataWrites.js'
+import { addTaskAttachment, createTask, replaceUserRolesAndOverrides, reviewTask, upsertRoleWithPermissions } from './accessWorkflowWrites.js'
 
 type AuthContext = { userId: string; login: string; perms: Record<PageKey, PageCrud> }
 
@@ -369,6 +370,78 @@ export async function buildApp() {
           const err = e as Error & { statusCode?: number }
           return reply.code(err.statusCode ?? 500).send({ error: 'bad_request', message: err.message })
         }
+        return reply.code(204).send()
+      })
+
+      r.post('/roles', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'users', 'edit')
+        const b = req.body as { id?: string; name?: string; description?: string; permissions?: Record<PageKey, PageCrud> }
+        if (!b.permissions) return reply.code(400).send({ error: 'bad_request', message: 'permissions required' })
+        const res = await upsertRoleWithPermissions(pool, {
+          id: b.id,
+          name: String(b.name ?? ''),
+          description: String(b.description ?? ''),
+          permissions: b.permissions,
+        })
+        if (!res.ok) return reply.code(400).send({ error: 'bad_request', message: res.error })
+        return reply.code(201).send({ id: res.roleId })
+      })
+
+      r.patch<{ Params: { id: string } }>('/users/:id/access', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'users', 'edit')
+        const b = req.body as { roleIds?: string[]; overrides?: Partial<Record<PageKey, PageCrud>> }
+        const res = await replaceUserRolesAndOverrides(pool, {
+          userId: req.params.id,
+          roleIds: Array.isArray(b.roleIds) ? b.roleIds.map((x) => String(x)) : [],
+          overrides: b.overrides,
+        })
+        if (!res.ok) return reply.code(400).send({ error: 'bad_request', message: res.error })
+        return reply.code(204).send()
+      })
+
+      r.post('/tasks', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'assignment', 'create')
+        const b = req.body as Record<string, unknown>
+        const res = await createTask(pool, {
+          title: String(b.title ?? ''),
+          description: String(b.description ?? ''),
+          assignedToUserId: String(b.assignedToUserId ?? ''),
+          reviewerUserId: b.reviewerUserId ? String(b.reviewerUserId) : null,
+          dueDate: b.dueDate ? String(b.dueDate).slice(0, 10) : null,
+          createdByUserId: req.auth!.userId,
+        })
+        if (!res.ok) return reply.code(400).send({ error: 'bad_request', message: res.error })
+        return reply.code(201).send({ id: res.taskId })
+      })
+
+      r.post<{ Params: { id: string } }>('/tasks/:id/attachments', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'assignment', 'edit')
+        const b = req.body as Record<string, unknown>
+        const res = await addTaskAttachment(pool, {
+          taskId: req.params.id,
+          uploadedByUserId: req.auth!.userId,
+          filename: String(b.filename ?? ''),
+          mimeType: String(b.mimeType ?? ''),
+          contentBase64: String(b.contentBase64 ?? ''),
+        })
+        if (!res.ok) return reply.code(400).send({ error: 'bad_request', message: res.error })
+        return reply.code(201).send({ id: res.attachmentId })
+      })
+
+      r.post<{ Params: { id: string } }>('/tasks/:id/review', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'assignment', 'edit')
+        const b = req.body as Record<string, unknown>
+        const decision = String(b.decision ?? '')
+        if (decision !== 'approved' && decision !== 'changes_requested') {
+          return reply.code(400).send({ error: 'bad_request', message: 'decision must be approved or changes_requested' })
+        }
+        const res = await reviewTask(pool, {
+          taskId: req.params.id,
+          reviewerUserId: req.auth!.userId,
+          decision,
+          comment: String(b.comment ?? ''),
+        })
+        if (!res.ok) return reply.code(400).send({ error: 'bad_request', message: res.error })
         return reply.code(204).send()
       })
     },

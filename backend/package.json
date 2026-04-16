@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "migrate": "tsx src/migrate.ts",
     "seed": "tsx src/seed/seed.ts",
-    "smoke": "tsx src/smoke.ts"
+    "smoke": "tsx src/smoke.ts",
+    "test": "node --test --import tsx src/**/*.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",

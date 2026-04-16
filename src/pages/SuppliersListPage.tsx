@@ -8,6 +8,7 @@ import { useCan } from '@/auth/AuthContext'
 import { suppliersGridConfig } from '@/pages/gridPageConfigs.stockDomain'
 import type { Supplier } from '@/mocks/domain/types'
 import { useMockStore } from '@/mocks/mockStore'
+import './formPage.css'
 
 export function SuppliersListPage() {
   const { suppliers } = useMockStore()
@@ -49,6 +50,17 @@ export function SuppliersListPage() {
           </Link>
         ) : null}
       </div>
+      {suppliers.length === 0 ? (
+        <p className="form-page__hint form-page__hint--warn" style={{ marginTop: 8 }}>
+          No suppliers yet. Add one before creating purchases that reference a vendor.{' '}
+          {perm.create ? (
+            <>
+              <Link to="/master-data/suppliers/new">Add supplier</Link> ·{' '}
+            </>
+          ) : null}
+          <Link to="/purchases">Purchases</Link>
+        </p>
+      ) : null}
       <PortalGridPage config={suppliersGridConfig} dataSource={suppliers} rowActions={rowActions} />
     </>
   )

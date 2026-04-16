@@ -20,8 +20,14 @@ export function SupplierNewPage() {
 
   const submit = async () => {
     setError(null)
-    if (!perm.create) return
-    if (!name.trim()) return
+    if (!perm.create) {
+      setError('You do not have permission to create suppliers.')
+      return
+    }
+    if (!name.trim()) {
+      setError('Supplier name is required.')
+      return
+    }
     try {
       await portalAddSupplier(name, contactName, email, phone, address, notes)
       navigate('/master-data/suppliers')
@@ -53,7 +59,7 @@ export function SupplierNewPage() {
           type="default"
           stylingMode="contained"
           disabled={!perm.create}
-          onClick={submit}
+          onClick={() => void submit()}
         />
         <Button text="Cancel" onClick={() => navigate('/master-data/suppliers')} />
       </div>

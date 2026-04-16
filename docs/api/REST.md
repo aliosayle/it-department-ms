@@ -16,7 +16,7 @@ Errors: `{ "error": "code", "message": "Human-readable detail" }`. **403** means
 | GET/PATCH/DELETE | `/companies/:id` | |
 | GET/POST | `/sites` | FK `companyId` |
 | GET/POST | `/personnel` | FK `companyId`, `siteId` |
-| GET/POST | `/suppliers` | |
+| GET/POST | `/suppliers` | **POST** requires non-empty `name`; other fields optional strings |
 | GET/POST | `/products` | **SKU unique** globally |
 | GET/POST | `/storage-units` | FK `siteId`; custody bins require `personnelId` aligned to same site |
 

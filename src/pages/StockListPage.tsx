@@ -8,6 +8,7 @@ import { stockProductSummaryGridConfig } from '@/pages/gridPageConfigs.stockDoma
 import { useCan } from '@/auth/AuthContext'
 import { buildStockOverviewByProduct, useMockStore } from '@/mocks/mockStore'
 import type { StockProductSummaryRow } from '@/mocks/domain/types'
+import './formPage.css'
 
 export function StockListPage() {
   useMockStore()
@@ -79,6 +80,12 @@ export function StockListPage() {
           </Link>
         ) : null}
       </div>
+      {rows.length === 0 ? (
+        <p className="form-page__hint form-page__hint--warn" style={{ marginTop: 8 }}>
+          No stock on hand yet. Define products and storage, then receive via{' '}
+          <Link to="/stock/receive">Receive stock</Link> or <Link to="/purchases">Purchases</Link>.
+        </p>
+      ) : null}
       <PortalGridPage
         config={stockProductSummaryGridConfig}
         dataSource={rows}

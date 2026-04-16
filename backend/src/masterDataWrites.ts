@@ -136,12 +136,14 @@ export async function insertSupplier(
     notes: string
   },
 ): Promise<Record<string, unknown>> {
+  const name = row.name.trim()
+  if (!name) throw Object.assign(new Error('Supplier name is required.'), { statusCode: 400 })
   const id = nextId('sup')
   await pool.query(
     'INSERT INTO suppliers (id, name, contact_name, email, phone, address, notes) VALUES (?,?,?,?,?,?,?)',
     [
       id,
-      row.name.trim(),
+      name,
       (row.contactName || '').trim(),
       (row.email || '').trim(),
       (row.phone || '').trim(),
@@ -151,7 +153,7 @@ export async function insertSupplier(
   )
   return {
     id,
-    name: row.name.trim(),
+    name,
     contactName: (row.contactName || '').trim(),
     email: (row.email || '').trim(),
     phone: (row.phone || '').trim(),

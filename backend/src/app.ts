@@ -260,17 +260,23 @@ export async function buildApp() {
         }
       })
 
-      r.post('/suppliers', { preHandler: requireAuth }, async (req) => {
+      r.post('/suppliers', { preHandler: requireAuth }, async (req, reply) => {
         assertPermission(req.auth!.perms, 'suppliers', 'create')
         const b = req.body as Record<string, string | undefined>
-        return insertSupplier(pool, {
-          name: String(b.name ?? ''),
-          contactName: String(b.contactName ?? ''),
-          email: String(b.email ?? ''),
-          phone: String(b.phone ?? ''),
-          address: String(b.address ?? ''),
-          notes: String(b.notes ?? ''),
-        })
+        try {
+          return await insertSupplier(pool, {
+            name: String(b.name ?? ''),
+            contactName: String(b.contactName ?? ''),
+            email: String(b.email ?? ''),
+            phone: String(b.phone ?? ''),
+            address: String(b.address ?? ''),
+            notes: String(b.notes ?? ''),
+          })
+        } catch (e) {
+          const err = e as Error & { statusCode?: number }
+          const code = err.statusCode === 409 ? 409 : 400
+          return reply.code(code).send({ error: code === 409 ? 'conflict' : 'bad_request', message: err.message })
+        }
       })
 
       r.post('/products', { preHandler: requireAuth }, async (req, reply) => {

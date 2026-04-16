@@ -598,6 +598,7 @@ export function addSupplier(
   address: string,
   notes: string,
 ): Supplier {
+  if (!name.trim()) throw new Error('Supplier name is required.')
   const row: Supplier = {
     id: nextId('sup'),
     name: name.trim(),

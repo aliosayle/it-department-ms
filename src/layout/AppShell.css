@@ -114,30 +114,10 @@
   min-width: 0;
 }
 
-/* TODO: remove after deploy test — bright bar proves new static assets are live */
 .app-shell__topbar {
-  background: #b91c1c;
-  color: #fff;
-  border-bottom: 1px solid #7f1d1d;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   box-shadow: var(--shadow-sm);
-}
-
-.app-shell__topbar .app-shell__subtitle {
-  color: rgba(255, 255, 255, 0.88);
-}
-
-.app-shell__topbar .form-page__hint {
-  color: rgba(255, 255, 255, 0.92);
-}
-
-.app-shell__topbar .app-shell__logout {
-  border-color: rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-}
-
-.app-shell__topbar .app-shell__logout:hover {
-  background: rgba(255, 255, 255, 0.22);
 }
 
 .app-shell__topbar-inner {

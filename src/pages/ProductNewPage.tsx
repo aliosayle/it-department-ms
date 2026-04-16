@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Button from 'devextreme-react/button'
 import TextBox from 'devextreme-react/text-box'
 import { useCan } from '@/auth/AuthContext'
@@ -45,8 +45,9 @@ export function ProductNewPage() {
       <h1 style={{ marginTop: 0 }}>New product</h1>
       {error ? <p className="form-page__error">{error}</p> : null}
       <p className="form-page__hint">
-        SKU must be unique across the catalog. After saving, use <strong>Receive stock</strong> or{' '}
-        <strong>Purchases</strong> to put quantities on hand.
+        <Link to="/products">Products</Link> · SKU must be unique across the catalog. After saving, use{' '}
+        <Link to="/stock/receive">Receive stock</Link> or <Link to="/purchases">Purchases</Link> to put quantities on
+        hand.
       </p>
       <TextBox label="SKU" value={sku} onValueChanged={(e) => setSku(String(e.value ?? ''))} />
       <TextBox label="Name" value={name} onValueChanged={(e) => setName(String(e.value ?? ''))} />

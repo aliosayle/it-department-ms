@@ -37,6 +37,7 @@ const navItems: NavItem[] = [
   { to: '/products', page: 'products', title: 'Products', icon: 'products', label: 'Products' },
   { to: '/purchases', page: 'purchases', title: 'Purchases', icon: 'purchases', label: 'Purchases' },
   { to: '/assignments', page: 'assignment', title: 'Assignments', icon: 'assignment', label: 'Assignments' },
+  { to: '/assignments/review', page: 'assignment', title: 'Task review', icon: 'assignment', label: 'Task review' },
   {
     to: '/master-data/suppliers',
     page: 'suppliers',
@@ -62,6 +63,7 @@ const navItems: NavItem[] = [
   },
   { to: '/inventory/network', page: 'network', title: 'Network', icon: 'network', label: 'Network' },
   { to: '/admin/users', page: 'users', title: 'Users', icon: 'users', label: 'Users' },
+  { to: '/admin/roles', page: 'users', title: 'Roles', icon: 'users', label: 'Roles' },
 ]
 
 export function AppShell() {

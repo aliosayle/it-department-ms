@@ -252,3 +252,61 @@ export async function portalAddStorageUnit(input: {
     return mapLiveFailure(e) as { ok: false; error: string }
   }
 }
+
+export async function portalUpsertRole(input: { id?: string; name: string; description?: string; permissions: Record<PageKey, PageCrud> }) {
+  if (!isLiveApi()) return { ok: false as const, error: NEED_API }
+  try {
+    await apiPostJson('/roles', input)
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    return { ok: true as const }
+  } catch (e) {
+    return mapLiveFailure(e)
+  }
+}
+
+export async function portalUpdateUserAccess(input: { userId: string; roleIds: string[]; overrides: Record<PageKey, PageCrud> }) {
+  if (!isLiveApi()) return { ok: false as const, error: NEED_API }
+  try {
+    await apiPatchJson(`/users/${encodeURIComponent(input.userId)}/access`, {
+      roleIds: input.roleIds,
+      overrides: input.overrides,
+    })
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    return { ok: true as const }
+  } catch (e) {
+    return mapLiveFailure(e)
+  }
+}
+
+export async function portalCreateTask(input: { title: string; description: string; assignedToUserId: string; reviewerUserId?: string | null; dueDate?: string | null }) {
+  if (!isLiveApi()) return { ok: false as const, error: NEED_API }
+  try {
+    await apiPostJson('/tasks', input)
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    return { ok: true as const }
+  } catch (e) {
+    return mapLiveFailure(e)
+  }
+}
+
+export async function portalUploadTaskAttachment(input: { taskId: string; filename: string; mimeType: string; contentBase64: string }) {
+  if (!isLiveApi()) return { ok: false as const, error: NEED_API }
+  try {
+    await apiPostJson(`/tasks/${encodeURIComponent(input.taskId)}/attachments`, input)
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    return { ok: true as const }
+  } catch (e) {
+    return mapLiveFailure(e)
+  }
+}
+
+export async function portalReviewTask(input: { taskId: string; decision: 'approved' | 'changes_requested'; comment?: string }) {
+  if (!isLiveApi()) return { ok: false as const, error: NEED_API }
+  try {
+    await apiPostJson(`/tasks/${encodeURIComponent(input.taskId)}/review`, input)
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    return { ok: true as const }
+  } catch (e) {
+    return mapLiveFailure(e)
+  }
+}

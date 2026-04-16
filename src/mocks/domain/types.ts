@@ -301,6 +301,7 @@ export type PortalUser = {
   id: string
   displayName: string
   login: string
+  roleIds?: string[]
   /** Normalized in the store: every `PageKey` is present. */
   permissions: Record<PageKey, PageCrud>
 }

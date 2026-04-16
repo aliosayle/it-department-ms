@@ -43,6 +43,9 @@ import { UserPermissionsPage } from '@/pages/UserPermissionsPage'
 import { UserNewPage } from '@/pages/UserNewPage'
 import { UsersListPage } from '@/pages/UsersListPage'
 import { LoginPage } from '@/pages/LoginPage'
+import { RolesPage } from '@/pages/RolesPage'
+import { UserAccessPage } from '@/pages/UserAccessPage'
+import { TaskReviewPage } from '@/pages/TaskReviewPage'
 
 export function AppRoutes() {
   return (
@@ -303,6 +306,30 @@ export function AppRoutes() {
           element={
             <PageGuard page="users">
               <UserPermissionsPage />
+            </PageGuard>
+          }
+        />
+        <Route
+          path="admin/users/:userId/access"
+          element={
+            <PageGuard page="users">
+              <UserAccessPage />
+            </PageGuard>
+          }
+        />
+        <Route
+          path="admin/roles"
+          element={
+            <PageGuard page="users">
+              <RolesPage />
+            </PageGuard>
+          }
+        />
+        <Route
+          path="assignments/review"
+          element={
+            <PageGuard page="assignment">
+              <TaskReviewPage />
             </PageGuard>
           }
         />

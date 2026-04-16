@@ -16,4 +16,9 @@ export {
   portalAddSupplier,
   portalAddProduct,
   portalAddStorageUnit,
+  portalUpsertRole,
+  portalUpdateUserAccess,
+  portalCreateTask,
+  portalUploadTaskAttachment,
+  portalReviewTask,
 } from '@/api/mutations'

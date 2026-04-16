@@ -13,6 +13,8 @@ const staticTitles: Record<string, PageMeta> = {
   '/stock/storage-units/new': { title: 'New storage unit', subtitle: 'Site bin or custody holder' },
   '/admin/users': { title: 'Users', subtitle: 'Access profiles by application area' },
   '/admin/users/new': { title: 'New portal user', subtitle: 'Login and initial deny-all access' },
+  '/admin/roles': { title: 'Roles', subtitle: 'Role-based permission templates' },
+  '/assignments/review': { title: 'Task review', subtitle: 'Assignment review workflow and uploads' },
   '/assignments': { title: 'Assignments', subtitle: 'Issue stock or assets to personnel' },
   '/assignments/new': { title: 'New assignment', subtitle: 'Assign from stock or external receipt' },
   '/purchases': { title: 'Purchases', subtitle: 'Bons and inbound orders' },
@@ -64,6 +66,10 @@ const patternTitles: { pattern: string; meta: PageMeta }[] = [
   {
     pattern: '/stock/storage-units/:storageUnitId',
     meta: { title: 'Storage unit', subtitle: 'Stock in this unit' },
+  },
+  {
+    pattern: '/admin/users/:userId/access',
+    meta: { title: 'User access', subtitle: 'Role mapping and overrides' },
   },
   {
     pattern: '/admin/users/:userId',

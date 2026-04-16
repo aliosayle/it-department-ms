@@ -76,10 +76,10 @@ run_apt_base() {
   log_info "apt-get update (base packages: curl, ca-certificates, gnupg, git, openssl)…"
   if [[ "$VERBOSE" == "1" ]]; then
     $SUDO apt-get update
-    $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y curl ca-certificates gnupg git openssl
+    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y curl ca-certificates gnupg git openssl
   else
     $SUDO apt-get update -qq
-    $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl ca-certificates gnupg git openssl
+    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl ca-certificates gnupg git openssl
   fi
   log_info "Base apt packages installed."
 }
@@ -88,9 +88,9 @@ apt_install() {
   [[ "$SKIP_APT" == "1" ]] && die "SKIP_APT=1 but a package install was required: $*"
   log_info "apt-get install -y $*"
   if [[ "$VERBOSE" == "1" ]]; then
-    $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
   else
-    $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@"
+    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@"
   fi
 }
 

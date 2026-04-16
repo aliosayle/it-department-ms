@@ -5,7 +5,7 @@ import { PortalGridPage } from '@/components/grid/PortalGridPage'
 import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { productReportGridConfig } from '@/pages/gridPageConfigs.stockDomain'
 import type { ProductReportRow } from '@/mocks/domain/types'
-import { getProductById, getReportsForProduct, useMockStore } from '@/mocks/mockStore'
+import { getProductById, getReportsForProduct, productCatalogLabel, useMockStore } from '@/mocks/mockStore'
 import { useCan } from '@/auth/AuthContext'
 
 export function ProductReportsPage() {
@@ -40,7 +40,7 @@ export function ProductReportsPage() {
   return (
     <>
       <p className="form-page__hint" style={{ marginTop: 0 }}>
-        Summary metrics for <strong>{product.sku}</strong> — {product.name}
+        Summary metrics for <strong>{productCatalogLabel(product)}</strong> — {product.name}
       </p>
       <PortalGridPage config={productReportGridConfig} dataSource={rows} rowActions={rowActions} />
     </>

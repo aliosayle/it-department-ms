@@ -36,7 +36,7 @@ const navItems: NavItem[] = [
   },
   { to: '/products', page: 'products', title: 'Products', icon: 'products', label: 'Products' },
   { to: '/purchases', page: 'purchases', title: 'Purchases', icon: 'purchases', label: 'Purchases' },
-  { to: '/delivery', page: 'delivery', title: 'Deliveries', icon: 'delivery', label: 'Deliveries' },
+  { to: '/assignments', page: 'assignment', title: 'Assignments', icon: 'assignment', label: 'Assignments' },
   {
     to: '/master-data/suppliers',
     page: 'suppliers',

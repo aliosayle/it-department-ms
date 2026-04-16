@@ -11,9 +11,24 @@ export type ReceiveInput = {
   purchaseId?: string | null
 }
 
+export type ReceiveSerializedInput = {
+  productId: string
+  storageUnitId: string
+  identifiers: string[]
+  reason: string
+  note: string
+  purchaseId?: string | null
+}
+
 function fmtLabel(code: string, label: string): string {
   return `${code} (${label})`
 }
+
+function normalizeAssetIdentifier(raw: string): string {
+  return raw.trim().replace(/\s+/g, ' ')
+}
+
+const MOV_COLS = `INSERT INTO inventory_movements (id, product_id, occurred_at, delta, reason, note, ref_assignment_id, ref_asset_id, ref_stock_position_id, purchase_id, personnel_id, correlation_id, from_storage_label, to_storage_label)`
 
 /** Receive stock using an existing connection (caller manages transaction). */
 export async function receiveStockInConn(
@@ -23,8 +38,18 @@ export async function receiveStockInConn(
   const q = Math.floor(Number(input.quantity))
   if (q < 1) return { ok: false, error: 'Quantity must be at least 1.' }
   try {
-    const [[pr]] = await conn.query<RowDataPacket[]>('SELECT id FROM products WHERE id = ?', [input.productId])
+    const [[pr]] = await conn.query<RowDataPacket[]>(
+      'SELECT id, tracking_mode AS trackingMode FROM products WHERE id = ?',
+      [input.productId],
+    )
     if (!pr) return { ok: false, error: 'Product not found.' }
+    if (String(pr.trackingMode) === 'serialized') {
+      return {
+        ok: false,
+        error:
+          'This product is tracked by serial/MAC. Use POST /api/v1/inventory/receive-serialized with identifiers instead of quantity receive.',
+      }
+    }
     const [[su]] = await conn.query<RowDataPacket[]>('SELECT id, code, label FROM storage_units WHERE id = ?', [
       input.storageUnitId,
     ])
@@ -54,14 +79,14 @@ export async function receiveStockInConn(
     }
     const movId = nextId('mov')
     await conn.query(
-      `INSERT INTO inventory_movements (id, product_id, occurred_at, delta, reason, note, ref_delivery_id, ref_stock_position_id, purchase_id, personnel_id, correlation_id, from_storage_label, to_storage_label)
-       VALUES (?,?,NOW(6),?,?,?,?,?,?,?,?,?,?)`,
+      `${MOV_COLS} VALUES (?,?,NOW(6),?,?,?,?,?,?,?,?,?,?,?)`,
       [
         movId,
         input.productId,
         q,
         `receive:${input.reason}`,
         note || 'Inbound receive',
+        null,
         null,
         positionId,
         input.purchaseId ?? null,
@@ -77,11 +102,101 @@ export async function receiveStockInConn(
   }
 }
 
+/** Create one serialized_assets row per identifier (same connection / transaction). */
+export async function receiveSerializedInConn(
+  conn: PoolConnection,
+  input: ReceiveSerializedInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const ids = (input.identifiers || []).map(normalizeAssetIdentifier).filter((s) => s.length > 0)
+  if (ids.length < 1) return { ok: false, error: 'At least one serial number or MAC is required.' }
+  try {
+    const [[pr]] = await conn.query<RowDataPacket[]>(
+      'SELECT id, tracking_mode AS trackingMode FROM products WHERE id = ?',
+      [input.productId],
+    )
+    if (!pr) return { ok: false, error: 'Product not found.' }
+    if (String(pr.trackingMode) !== 'serialized') {
+      return { ok: false, error: 'This product is not configured for serialized tracking.' }
+    }
+    const [[su]] = await conn.query<RowDataPacket[]>(
+      'SELECT id, code, label, site_id AS siteId FROM storage_units WHERE id = ?',
+      [input.storageUnitId],
+    )
+    if (!su) return { ok: false, error: 'Storage unit not found.' }
+    const siteId = String(su.siteId)
+    const toLabel = fmtLabel(String(su.code), String(su.label))
+    const note = (input.note || '').trim() || 'Serialized receive'
+    const reason = `receive:${input.reason}`
+
+    for (const identifier of ids) {
+      const [[dup]] = await conn.query<RowDataPacket[]>('SELECT id FROM serialized_assets WHERE identifier = ?', [
+        identifier,
+      ])
+      if (dup) {
+        return { ok: false, error: `Duplicate identifier: ${identifier}` }
+      }
+      const assetId = nextId('ast')
+      await conn.query(
+        'INSERT INTO serialized_assets (id, product_id, identifier, site_id, storage_unit_id, status) VALUES (?,?,?,?,?,?)',
+        [assetId, input.productId, identifier, siteId, input.storageUnitId, 'Available'],
+      )
+      const movId = nextId('mov')
+      await conn.query(
+        `${MOV_COLS} VALUES (?,?,NOW(6),?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          movId,
+          input.productId,
+          1,
+          reason,
+          note,
+          null,
+          assetId,
+          null,
+          input.purchaseId ?? null,
+          null,
+          null,
+          '—',
+          toLabel,
+        ],
+      )
+    }
+    return { ok: true }
+  } catch (e) {
+    const err = e as { code?: string }
+    if (err?.code === 'ER_DUP_ENTRY') {
+      return { ok: false, error: 'Duplicate identifier (MAC/serial already exists).' }
+    }
+    return { ok: false, error: e instanceof Error ? e.message : 'Serialized receive failed' }
+  }
+}
+
 export async function receiveStockTx(pool: Pool, input: ReceiveInput): Promise<{ ok: true } | { ok: false; error: string }> {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const r = await receiveStockInConn(conn, input)
+    if (!r.ok) {
+      await conn.rollback()
+      return r
+    }
+    await conn.commit()
+    return { ok: true }
+  } catch (e) {
+    await conn.rollback()
+    return { ok: false, error: e instanceof Error ? e.message : 'Transaction failed' }
+  } finally {
+    conn.release()
+  }
+}
+
+export async function receiveSerializedTx(
+  pool: Pool,
+  input: ReceiveSerializedInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const r = await receiveSerializedInConn(conn, input)
     if (!r.ok) {
       await conn.rollback()
       return r
@@ -124,6 +239,14 @@ export async function transferStockTx(pool: Pool, input: TransferInput): Promise
     if (String(fromPos.storageUnitId) === input.toStorageUnitId) {
       await conn.rollback()
       return { ok: false, error: 'Source and destination storage are the same.' }
+    }
+    const [[prFrom]] = await conn.query<RowDataPacket[]>(
+      'SELECT tracking_mode AS trackingMode FROM products WHERE id = ?',
+      [fromPos.productId],
+    )
+    if (prFrom && String(prFrom.trackingMode) === 'serialized') {
+      await conn.rollback()
+      return { ok: false, error: 'Serialized products are moved as individual assets, not bulk transfer.' }
     }
     const [[destSu]] = await conn.query<RowDataPacket[]>(
       'SELECT id, code, label, site_id AS siteId FROM storage_units WHERE id = ?',
@@ -173,14 +296,14 @@ export async function transferStockTx(pool: Pool, input: TransferInput): Promise
     const outId = nextId('mov')
     const inId = nextId('mov')
     await conn.query(
-      `INSERT INTO inventory_movements (id, product_id, occurred_at, delta, reason, note, ref_delivery_id, ref_stock_position_id, purchase_id, personnel_id, correlation_id, from_storage_label, to_storage_label)
-       VALUES (?,?,NOW(6),?,?,?,?,?,?,?,?,?,?)`,
+      `${MOV_COLS} VALUES (?,?,NOW(6),?,?,?,?,?,?,?,?,?,?,?)`,
       [
         outId,
         productId,
         -q,
         'transfer_out',
         note,
+        null,
         null,
         input.fromStockPositionId,
         null,
@@ -191,9 +314,8 @@ export async function transferStockTx(pool: Pool, input: TransferInput): Promise
       ],
     )
     await conn.query(
-      `INSERT INTO inventory_movements (id, product_id, occurred_at, delta, reason, note, ref_delivery_id, ref_stock_position_id, purchase_id, personnel_id, correlation_id, from_storage_label, to_storage_label)
-       VALUES (?,?,DATE_ADD(NOW(6), INTERVAL 1 MICROSECOND),?,?,?,?,?,?,?,?,?,?)`,
-      [inId, productId, q, 'transfer_in', note, null, destPositionId, null, null, correlationId, fromLabel, toLabel],
+      `${MOV_COLS} VALUES (?,?,DATE_ADD(NOW(6), INTERVAL 1 MICROSECOND),?,?,?,?,?,?,?,?,?,?,?)`,
+      [inId, productId, q, 'transfer_in', note, null, null, destPositionId, null, null, correlationId, fromLabel, toLabel],
     )
 
     await conn.commit()

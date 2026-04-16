@@ -5,7 +5,7 @@ import { PortalGridPage } from '@/components/grid/PortalGridPage'
 import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { productStockPositionsGridConfig } from '@/pages/gridPageConfigs.stockDomain'
 import type { ProductStockRow } from '@/mocks/mockStore'
-import { buildProductStockRows, getProductById, useMockStore } from '@/mocks/mockStore'
+import { buildProductStockRows, getProductById, productCatalogLabel, useMockStore } from '@/mocks/mockStore'
 import { useCan } from '@/auth/AuthContext'
 
 export function ProductStockPage() {
@@ -40,7 +40,7 @@ export function ProductStockPage() {
   return (
     <>
       <p className="form-page__hint" style={{ marginTop: 0 }}>
-        Stock positions for <strong>{product.sku}</strong>
+        Stock positions for <strong>{productCatalogLabel(product)}</strong>
       </p>
       <PortalGridPage config={productStockPositionsGridConfig} dataSource={rows} rowActions={rowActions} />
     </>

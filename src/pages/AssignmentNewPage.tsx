@@ -7,18 +7,19 @@ import SelectBox from 'devextreme-react/select-box'
 import TextArea from 'devextreme-react/text-area'
 import TextBox from 'devextreme-react/text-box'
 import { useCan } from '@/auth/AuthContext'
-import { portalCreateDelivery } from '@/api/mutations'
+import { portalCreateAssignment } from '@/api/mutations'
 import { useMockStore } from '@/mocks/mockStore'
-import type { DeliverySource } from '@/mocks/domain/types'
+import type { AssignmentSource } from '@/mocks/domain/types'
 import './formPage.css'
 
-export function DeliveryNewPage() {
+export function AssignmentNewPage() {
   const navigate = useNavigate()
-  const { stockPositions, products, storageUnits, companies, sites, personnel } = useMockStore()
-  const perm = useCan('delivery')
+  const { stockPositions, products, storageUnits, serializedAssets, companies, sites, personnel } = useMockStore()
+  const perm = useCan('assignment')
 
-  const [source, setSource] = useState<DeliverySource>('external')
+  const [source, setSource] = useState<AssignmentSource>('external')
   const [stockPositionId, setStockPositionId] = useState<string | null>(null)
+  const [serializedAssetId, setSerializedAssetId] = useState<string | null>(null)
   const [quantity, setQuantity] = useState<number | null>(1)
   const [itemReceivedDate, setItemReceivedDate] = useState<Date | null>(new Date())
   const [itemDescription, setItemDescription] = useState('')
@@ -89,15 +90,34 @@ export function DeliveryNewPage() {
         const su = storageUnits.find((u) => u.id === pos.storageUnitId)
         if (su?.kind === 'custody') return null
         if (siteId && su?.siteId !== siteId) return null
-        const sku = pr?.sku ?? pos.productId
+        if (pr?.trackingMode === 'serialized') return null
+        const ref = pr?.reference || pr?.sku || pos.productId
         const loc = su ? `${su.code} — ${su.label}` : '—'
         return {
           value: pos.id,
-          text: `${sku} @ ${loc} (qty ${pos.quantity})`,
+          text: `${ref} @ ${loc} (qty ${pos.quantity})`,
         }
       })
       .filter((x): x is { value: string; text: string } => x != null)
   }, [stockPositions, products, storageUnits, siteId])
+
+  const assetOptions = useMemo(() => {
+    if (!siteId) return []
+    return serializedAssets
+      .map((a) => {
+        const pr = products.find((p) => p.id === a.productId)
+        const su = storageUnits.find((u) => u.id === a.storageUnitId)
+        if (!pr || pr.trackingMode !== 'serialized') return null
+        if (su?.kind === 'custody') return null
+        if (su?.siteId !== siteId) return null
+        const loc = su ? `${su.code} — ${su.label}` : '—'
+        return {
+          value: a.id,
+          text: `${a.identifier} · ${pr.reference || pr.sku || pr.name} @ ${loc}`,
+        }
+      })
+      .filter((x): x is { value: string; text: string } => x != null)
+  }, [serializedAssets, products, storageUnits, siteId])
 
   const maxQty = useMemo(() => {
     if (!stockPositionId) return undefined
@@ -113,7 +133,7 @@ export function DeliveryNewPage() {
   const submit = async () => {
     setError(null)
     if (!perm.create) {
-      setError('You do not have permission to create deliveries.')
+      setError('You do not have permission to create assignments.')
       return
     }
     if (!companyId || !siteId || !personnelId) {
@@ -121,8 +141,8 @@ export function DeliveryNewPage() {
       return
     }
     if (source === 'stock') {
-      if (!stockPositionId) {
-        setError('Select a warehouse stock position.')
+      if (!stockPositionId && !serializedAssetId) {
+        setError('Select a warehouse stock position or a serialized asset at this site.')
         return
       }
       if (!recipientHasCustody) {
@@ -138,10 +158,11 @@ export function DeliveryNewPage() {
         : null
     const deliveredStr = dateDelivered ? dateDelivered.toISOString().slice(0, 10) : ''
 
-    const result = await portalCreateDelivery({
+    const result = await portalCreateAssignment({
       source,
-      stockPositionId: source === 'stock' ? stockPositionId : null,
-      quantity: quantity ?? 0,
+      stockPositionId: source === 'stock' && !serializedAssetId ? stockPositionId : null,
+      serializedAssetId: source === 'stock' ? serializedAssetId : null,
+      quantity: serializedAssetId ? 1 : quantity ?? 0,
       itemReceivedDate: receivedStr,
       itemDescription: itemDescription.trim(),
       deliveredTo: deliveredTo.trim(),
@@ -157,7 +178,7 @@ export function DeliveryNewPage() {
       setError(result.error)
       return
     }
-    navigate('/delivery')
+    navigate('/assignments')
   }
 
   const fromStock = source === 'stock'
@@ -171,15 +192,15 @@ export function DeliveryNewPage() {
         <p className="form-page__hint form-page__hint--warn">
           Add at least one <Link to="/master-data/companies/new">company</Link>,{' '}
           <Link to="/master-data/sites/new">site</Link>, and <Link to="/master-data/personnel/new">personnel</Link>{' '}
-          before creating a delivery.
+          before creating an assignment.
         </p>
       ) : null}
 
       <p className="form-page__hint">
-        <strong>From stock:</strong> quantity is removed from the selected warehouse bin and added to the recipient’s{' '}
-        <strong>custody</strong> bin (same product, status Issued).{' '}
-        <Link to="/stock/storage-units/new">New storage unit</Link> — use kind <strong>custody</strong> and assign the
-        recipient.
+        <strong>From stock (bulk):</strong> quantity is removed from the selected warehouse bin and added to the
+        recipient’s <strong>custody</strong> bin. <strong>Serialized asset:</strong> one MAC/serial unit moves into
+        custody (quantity fixed to 1).{' '}
+        <Link to="/stock/storage-units/new">New storage unit</Link> — kind <strong>custody</strong> for the recipient.
       </p>
 
       <p className="form-page__section">Recipient</p>
@@ -193,6 +214,8 @@ export function DeliveryNewPage() {
           setCompanyId(e.value as string | null)
           setSiteId(null)
           setPersonnelId(null)
+          setStockPositionId(null)
+          setSerializedAssetId(null)
         }}
       />
       <SelectBox
@@ -205,6 +228,8 @@ export function DeliveryNewPage() {
         onValueChanged={(e) => {
           setSiteId(e.value as string | null)
           setPersonnelId(null)
+          setStockPositionId(null)
+          setSerializedAssetId(null)
         }}
       />
       <SelectBox
@@ -218,7 +243,7 @@ export function DeliveryNewPage() {
       />
       {personnelId && !recipientHasCustody ? (
         <p className="form-page__hint form-page__hint--warn">
-          This person has no <strong>custody</strong> bin yet — stock-based delivery will fail until you add one (
+          This person has no <strong>custody</strong> bin yet — stock-based assignment will fail until you add one (
           <Link to="/stock/storage-units/new">new storage unit</Link>, same site, kind custody, holder = this person).
         </p>
       ) : null}
@@ -236,7 +261,7 @@ export function DeliveryNewPage() {
         valueExpr="value"
         value={source}
         onValueChanged={(e) => {
-          setSource(e.value as DeliverySource)
+          setSource(e.value as AssignmentSource)
           setError(null)
         }}
       />
@@ -244,31 +269,50 @@ export function DeliveryNewPage() {
       {fromStock ? (
         <>
           <SelectBox
-            label="Stock position (warehouse only, this site)"
+            label="Stock position (quantity products, this site)"
             dataSource={stockOptions}
             displayExpr="text"
             valueExpr="value"
             value={stockPositionId}
             searchEnabled
-            onValueChanged={(e) => setStockPositionId(e.value as string | null)}
+            onValueChanged={(e) => {
+              setStockPositionId(e.value as string | null)
+              if (e.value) setSerializedAssetId(null)
+            }}
           />
-          {stockOptions.length === 0 ? (
+          <SelectBox
+            label="Or: serialized asset (MAC/serial in warehouse at this site)"
+            dataSource={assetOptions}
+            displayExpr="text"
+            valueExpr="value"
+            value={serializedAssetId}
+            searchEnabled
+            onValueChanged={(e) => {
+              setSerializedAssetId(e.value as string | null)
+              if (e.value) {
+                setStockPositionId(null)
+                setQuantity(1)
+              }
+            }}
+          />
+          {stockOptions.length === 0 && assetOptions.length === 0 ? (
             <p className="form-page__hint">
-              No on-hand positions at this site in non-custody storage. Use <Link to="/stock/receive">Receive stock</Link>{' '}
-              or <Link to="/purchases">Purchases</Link> first.
+              No bulk positions or serialized assets at this site in non-custody storage. Use{' '}
+              <Link to="/stock/receive">Receive stock</Link>, receive-serialized API, or <Link to="/purchases">Purchases</Link>.
             </p>
           ) : null}
           <NumberBox
-            label="Quantity"
-            value={quantity ?? undefined}
+            label="Quantity (bulk only; 1 when serialized asset is selected)"
+            value={serializedAssetId ? 1 : (quantity ?? undefined)}
             min={1}
-            max={maxQty}
+            max={serializedAssetId ? 1 : maxQty}
             showSpinButtons
+            disabled={!!serializedAssetId}
             onValueChanged={(e) => setQuantity(e.value as number | null)}
           />
           <p className="form-page__hint">
-            Item received date is not used when the source is stock. Warehouse quantity decreases; custody increases
-            for the recipient.
+            Item received date is not used when the source is stock. Choose either a bulk position or one serialized
+            asset, not both.
           </p>
         </>
       ) : (
@@ -289,7 +333,7 @@ export function DeliveryNewPage() {
         onValueChanged={(e) => setItemDescription(String(e.value ?? ''))}
       />
       <TextBox
-        label="Delivered to (override label)"
+        label="Assigned to (override label)"
         value={deliveredTo}
         onValueChanged={(e) => setDeliveredTo(String(e.value ?? ''))}
       />
@@ -299,7 +343,7 @@ export function DeliveryNewPage() {
         onValueChanged={(e) => setSiteLabel(String(e.value ?? ''))}
       />
       <DateBox
-        label="Date delivered"
+        label="Date assigned"
         type="date"
         value={dateDelivered}
         onValueChanged={(e) => setDateDelivered(e.value as Date | null)}
@@ -313,13 +357,13 @@ export function DeliveryNewPage() {
 
       <div className="form-page__actions">
         <Button
-          text="Create delivery"
+          text="Create assignment"
           type="default"
           stylingMode="contained"
           disabled={!perm.create || !masterDataReady}
           onClick={() => void submit()}
         />
-        <Button text="Cancel" onClick={() => navigate('/delivery')} />
+        <Button text="Cancel" onClick={() => navigate('/assignments')} />
       </div>
     </div>
   )

@@ -1,8 +1,8 @@
 import type {
+  Assignment,
   Company,
-  CreateDeliveryInput,
+  CreateAssignmentInput,
   CreatePurchaseInput,
-  Delivery,
   MovementStatementRow,
   NetworkDevice,
   PageCrud,
@@ -17,6 +17,7 @@ import type {
   PurchaseLineDetailRow,
   PurchaseListRow,
   ReceiveStockInput,
+  SerializedAsset,
   Site,
   StockOverviewRow,
   StockPosition,
@@ -37,7 +38,8 @@ export type StoreState = {
   stockPositions: StockPosition[]
   productMovements: ProductMovement[]
   productReports: ProductReportRow[]
-  deliveries: Delivery[]
+  assignments: Assignment[]
+  serializedAssets: SerializedAsset[]
   userEquipment: UserEquipment[]
   networkDevices: NetworkDevice[]
   users: PortalUser[]
@@ -49,6 +51,13 @@ export type StoreState = {
 export function formatStorageUnitLabel(u: StorageUnit | undefined): string {
   if (!u) return '—'
   return `${u.code} (${u.label})`
+}
+
+/** Primary catalog label: reference, with optional SKU in parentheses. */
+export function productCatalogLabel(p: Pick<Product, 'reference' | 'sku'>): string {
+  const ref = p.reference?.trim() || '—'
+  const sku = p.sku?.trim()
+  return sku ? `${ref} (${sku})` : ref
 }
 
 function stripZeroStockPositions(rows: StockPosition[]): StockPosition[] {
@@ -66,7 +75,8 @@ function emptyStore(): StoreState {
     stockPositions: [],
     productMovements: [],
     productReports: [],
-    deliveries: [],
+    assignments: [],
+    serializedAssets: [],
     userEquipment: [],
     networkDevices: [],
     users: [],
@@ -170,7 +180,7 @@ export function addPersonnel(
   return { ok: true, personnel: row }
 }
 
-function resolveDeliveryLabels(personnelId: string, siteId: string): { deliveredTo: string; site: string } {
+function resolveAssignmentLabels(personnelId: string, siteId: string): { deliveredTo: string; site: string } {
   const per = active().personnel.find((p) => p.id === personnelId)
   const site = active().sites.find((x) => x.id === siteId)
   return {
@@ -182,7 +192,14 @@ function resolveDeliveryLabels(personnelId: string, siteId: string): { delivered
 export function receiveStock(input: ReceiveStockInput): { ok: true } | { ok: false; error: string } {
   const q = Math.floor(input.quantity)
   if (q < 1) return { ok: false, error: 'Quantity must be at least 1.' }
-  if (!active().products.some((p) => p.id === input.productId)) return { ok: false, error: 'Product not found.' }
+  const prod = active().products.find((p) => p.id === input.productId)
+  if (!prod) return { ok: false, error: 'Product not found.' }
+  if (prod.trackingMode === 'serialized') {
+    return {
+      ok: false,
+      error: 'Serialized products must be received with identifiers (receive-serialized API or mock extension).',
+    }
+  }
   if (!active().storageUnits.some((u) => u.id === input.storageUnitId)) {
     return { ok: false, error: 'Storage unit not found.' }
   }
@@ -222,7 +239,8 @@ export function receiveStock(input: ReceiveStockInput): { ok: true } | { ok: fal
         at: new Date().toISOString(),
         delta: q,
         reason: `receive:${input.reason}`,
-        refDeliveryId: null,
+        refAssignmentId: null,
+        refAssetId: null,
         refStockPositionId: positionId,
         refPurchaseId: input.purchaseId ?? null,
         note: note || 'Inbound receive',
@@ -236,11 +254,11 @@ export function receiveStock(input: ReceiveStockInput): { ok: true } | { ok: fal
   return { ok: true }
 }
 
-export type CreateDeliveryResult =
-  | { ok: true; delivery: Delivery }
+export type CreateAssignmentResult =
+  | { ok: true; assignment: Assignment }
   | { ok: false; error: string }
 
-export function createDelivery(input: CreateDeliveryInput): CreateDeliveryResult {
+export function createAssignment(input: CreateAssignmentInput): CreateAssignmentResult {
   if (!input.companyId || !input.siteId || !input.personnelId) {
     return { ok: false, error: 'Company, site, and recipient are required.' }
   }
@@ -254,45 +272,55 @@ export function createDelivery(input: CreateDeliveryInput): CreateDeliveryResult
     return { ok: false, error: 'Recipient is not assigned to the selected site.' }
   }
 
+  const serializedIn = (input.serializedAssetId || '').trim() || null
+
   if (input.source === 'stock') {
-    if (!input.stockPositionId) {
-      return { ok: false, error: 'Select a stock position.' }
-    }
-    const idx = active().stockPositions.findIndex((x) => x.id === input.stockPositionId)
-    if (idx < 0) return { ok: false, error: 'Stock position not found.' }
-    if (input.quantity < 1) return { ok: false, error: 'Quantity must be at least 1.' }
-    if (input.quantity > active().stockPositions[idx].quantity) {
-      return {
-        ok: false,
-        error: `Insufficient quantity (available: ${active().stockPositions[idx].quantity}).`,
-      }
-    }
-    const fromStorage = active().storageUnits.find(
-      (u) => u.id === active().stockPositions[idx].storageUnitId,
-    )
-    if (fromStorage && fromStorage.siteId !== input.siteId) {
-      return {
-        ok: false,
-        error: 'Stock position must be in a storage unit at the selected delivery site.',
-      }
-    }
-    const custodySu = active().storageUnits.find(
-      (u) => u.personnelId === input.personnelId && u.kind === 'custody',
-    )
+    const custodySu = active().storageUnits.find((u) => u.personnelId === input.personnelId && u.kind === 'custody')
     if (!custodySu) {
       return {
         ok: false,
         error: 'Recipient has no custody storage unit. Add a custody bin for this person in storage units.',
       }
     }
+    if (serializedIn) {
+      if (Math.floor(input.quantity) !== 1) {
+        return { ok: false, error: 'Serialized assignment quantity must be 1.' }
+      }
+    } else {
+      if (!input.stockPositionId) return { ok: false, error: 'Select a stock position or serialized asset.' }
+      const idx = active().stockPositions.findIndex((x) => x.id === input.stockPositionId)
+      if (idx < 0) return { ok: false, error: 'Stock position not found.' }
+      if (input.quantity < 1) return { ok: false, error: 'Quantity must be at least 1.' }
+      if (input.quantity > active().stockPositions[idx].quantity) {
+        return {
+          ok: false,
+          error: `Insufficient quantity (available: ${active().stockPositions[idx].quantity}).`,
+        }
+      }
+      const fromStorage = active().storageUnits.find((u) => u.id === active().stockPositions[idx].storageUnitId)
+      if (fromStorage && fromStorage.siteId !== input.siteId) {
+        return {
+          ok: false,
+          error: 'Stock position must be in a storage unit at the selected assignment site.',
+        }
+      }
+      const pr = active().products.find((p) => p.id === active().stockPositions[idx].productId)
+      if (pr?.trackingMode === 'serialized') {
+        return {
+          ok: false,
+          error: 'Use a serialized asset (MAC/serial) for this product, not a bulk stock position.',
+        }
+      }
+    }
   }
 
-  const { deliveredTo, site: siteLabel } = resolveDeliveryLabels(input.personnelId, input.siteId)
+  const { deliveredTo, site: siteLabel } = resolveAssignmentLabels(input.personnelId, input.siteId)
 
-  const delivery: Delivery = {
-    id: nextId('del'),
+  const assignment: Assignment = {
+    id: nextId('asn'),
     source: input.source,
-    stockPositionId: input.source === 'stock' ? input.stockPositionId : null,
+    stockPositionId: input.source === 'stock' && !serializedIn ? input.stockPositionId : null,
+    serializedAssetId: input.source === 'stock' ? serializedIn : null,
     quantity: input.quantity,
     itemReceivedDate: input.source === 'stock' ? null : input.itemReceivedDate,
     itemDescription: input.itemDescription,
@@ -306,8 +334,56 @@ export function createDelivery(input: CreateDeliveryInput): CreateDeliveryResult
   }
 
   setState((s) => {
-    s.deliveries = [delivery, ...s.deliveries]
-    if (input.source === 'stock' && input.stockPositionId) {
+    s.assignments = [assignment, ...s.assignments]
+    if (input.source === 'stock' && serializedIn) {
+      const custodySu = s.storageUnits.find((u) => u.personnelId === input.personnelId && u.kind === 'custody')
+      const asset = s.serializedAssets.find((a) => a.id === serializedIn)
+      if (!custodySu || !asset) return
+      const fromSu = s.storageUnits.find((u) => u.id === asset.storageUnitId)
+      if (fromSu?.kind === 'custody') return
+      if (fromSu?.siteId !== input.siteId) return
+      const productId = asset.productId
+      const fromLabel = formatStorageUnitLabel(fromSu)
+      const custodyLabel = formatStorageUnitLabel(custodySu)
+      const recipient = s.personnel.find((p) => p.id === input.personnelId)
+      s.serializedAssets = s.serializedAssets.map((a) =>
+        a.id === serializedIn ? { ...a, storageUnitId: custodySu.id, status: 'Issued' } : a,
+      )
+      const now = Date.now()
+      const outAt = new Date(now).toISOString()
+      const inAt = new Date(now + 1).toISOString()
+      s.productMovements = [
+        {
+          id: nextId('mov'),
+          productId,
+          at: inAt,
+          delta: 1,
+          reason: 'custody_in',
+          refAssignmentId: assignment.id,
+          refAssetId: serializedIn,
+          refStockPositionId: null,
+          note: assignment.description || `Issued to ${recipient?.fullName ?? 'recipient'}`,
+          fromStorageLabel: fromLabel,
+          toStorageLabel: custodyLabel,
+          personnelId: input.personnelId,
+        },
+        {
+          id: nextId('mov'),
+          productId,
+          at: outAt,
+          delta: -1,
+          reason: 'assignment_out',
+          refAssignmentId: assignment.id,
+          refAssetId: serializedIn,
+          refStockPositionId: null,
+          note: assignment.description || 'Serialized assignment',
+          fromStorageLabel: fromLabel,
+          toStorageLabel: custodyLabel,
+          personnelId: input.personnelId,
+        },
+        ...s.productMovements,
+      ]
+    } else if (input.source === 'stock' && input.stockPositionId) {
       const pos = s.stockPositions.find((x) => x.id === input.stockPositionId)
       if (!pos) {
         return
@@ -362,9 +438,10 @@ export function createDelivery(input: CreateDeliveryInput): CreateDeliveryResult
           at: inAt,
           delta: q,
           reason: 'custody_in',
-          refDeliveryId: delivery.id,
+          refAssignmentId: assignment.id,
+          refAssetId: null,
           refStockPositionId: custodyPositionId,
-          note: delivery.description || `Issued to ${recipient?.fullName ?? 'recipient'}`,
+          note: assignment.description || `Issued to ${recipient?.fullName ?? 'recipient'}`,
           fromStorageLabel: fromLabel,
           toStorageLabel: custodyLabel,
           personnelId: input.personnelId,
@@ -374,10 +451,11 @@ export function createDelivery(input: CreateDeliveryInput): CreateDeliveryResult
           productId,
           at: outAt,
           delta: -q,
-          reason: 'delivery_out',
-          refDeliveryId: delivery.id,
+          reason: 'assignment_out',
+          refAssignmentId: assignment.id,
+          refAssetId: null,
           refStockPositionId: input.stockPositionId,
-          note: delivery.description || 'Outbound delivery',
+          note: assignment.description || 'Outbound assignment',
           fromStorageLabel: fromLabel,
           toStorageLabel: custodyLabel,
           personnelId: input.personnelId,
@@ -387,7 +465,7 @@ export function createDelivery(input: CreateDeliveryInput): CreateDeliveryResult
     }
   })
 
-  return { ok: true, delivery }
+  return { ok: true, assignment }
 }
 
 export type TransferStockResult = { ok: true } | { ok: false; error: string }
@@ -404,6 +482,10 @@ export function transferStock(input: TransferStockInput): TransferStockResult {
   if (!destSu) return { ok: false, error: 'Destination storage unit not found.' }
   if (fromPos.storageUnitId === input.toStorageUnitId) {
     return { ok: false, error: 'Source and destination storage are the same.' }
+  }
+  const pr = active().products.find((p) => p.id === fromPos.productId)
+  if (pr?.trackingMode === 'serialized') {
+    return { ok: false, error: 'Serialized products are moved as individual assets, not bulk transfer.' }
   }
   const fromSu = active().storageUnits.find((u) => u.id === fromPos.storageUnitId)
   const fromLabel = formatStorageUnitLabel(fromSu)
@@ -455,7 +537,8 @@ export function transferStock(input: TransferStockInput): TransferStockResult {
         at: inAt,
         delta: q,
         reason: 'transfer_in',
-        refDeliveryId: null,
+        refAssignmentId: null,
+        refAssetId: null,
         refStockPositionId: destPositionId,
         note,
         fromStorageLabel: fromLabel,
@@ -468,7 +551,8 @@ export function transferStock(input: TransferStockInput): TransferStockResult {
         at: outAt,
         delta: -q,
         reason: 'transfer_out',
-        refDeliveryId: null,
+        refAssignmentId: null,
+        refAssetId: null,
         refStockPositionId: input.fromStockPositionId,
         note,
         fromStorageLabel: fromLabel,
@@ -491,7 +575,7 @@ export function buildStockOverview(): StockOverviewRow[] {
     return {
       id: pos.id,
       productId: pos.productId,
-      productSku: product?.sku ?? pos.productId,
+      productSku: product?.reference || product?.sku || pos.productId,
       productName: product?.name ?? '—',
       storageCode: su ? `${su.code} (${su.label})` : '—',
       siteName: site?.name ?? '—',
@@ -514,7 +598,7 @@ export function buildStockOverviewByProduct(): StockProductSummaryRow[] {
     rows.push({
       id: productId,
       productId,
-      productSku: product?.sku ?? productId,
+      productSku: product?.reference || product?.sku || productId,
       productName: product?.name ?? '—',
       totalQuantity,
     })
@@ -533,7 +617,7 @@ export function buildStockPositionsForStorageUnit(storageUnitId: string): Storag
       return {
         id: pos.id,
         productId: pos.productId,
-        productSku: product?.sku ?? pos.productId,
+        productSku: product?.reference || product?.sku || pos.productId,
         productName: product?.name ?? '—',
         storageCode: su ? `${su.code} (${su.label})` : '—',
         siteName: site?.name ?? '—',
@@ -583,7 +667,8 @@ export function buildMovementStatementRows(productId: string): MovementStatement
       delta: m.delta,
       reason: m.reason,
       note: m.note,
-      refDeliveryId: m.refDeliveryId,
+      refAssignmentId: m.refAssignmentId,
+      refAssetId: m.refAssetId,
       refStockPositionId: m.refStockPositionId,
       refPurchaseId: m.refPurchaseId ?? null,
       correlationId: m.correlationId,
@@ -658,7 +743,7 @@ export function buildPurchaseLineDetailRows(purchaseId: string): PurchaseLineDet
       return {
         id: line.id,
         productId: line.productId,
-        productSku: pr?.sku ?? line.productId,
+        productSku: pr?.reference || pr?.sku || line.productId,
         productName: pr?.name ?? '—',
         quantity: line.quantity,
         unitPrice: line.unitPrice,

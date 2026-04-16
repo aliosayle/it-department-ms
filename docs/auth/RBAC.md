@@ -50,10 +50,11 @@ Alternatively, omit the bulky claim and load permissions from DB on each request
 | HTTP | Example route | PageKey | Required flag |
 |------|----------------|----------|----------------|
 | POST | `/inventory/receive` | `stockReceive` | `create` |
+| POST | `/inventory/receive-serialized` | `stockReceive` | `create` |
 | POST | `/inventory/transfer` | `stockTransfer` | `create` |
-| POST | `/deliveries` | `delivery` | `create` |
+| POST | `/assignments` | `assignment` | `create` |
 | POST | `/purchases` | `purchases` | `create` |
-| POST | `/purchases/:id/receive` | `purchases` | `create` |
+| POST | `/purchases/:id/receive` | `purchases` | `edit` |
 | GET | `/stock/overview` | `stock` | `view` |
 | PATCH | `/users/:id/permissions` | `users` | `edit` |
 
@@ -72,3 +73,15 @@ Alternatively, omit the bulky claim and load permissions from DB on each request
 ## Auditing
 
 Log denials (403) and successful mutations to `audit_log` with actor, IP, entity, and optional before/after JSON.
+
+---
+
+## Upgrading existing databases
+
+If `user_page_permissions` still uses the legacy page key `delivery` after deploying code that expects `assignment`, run (once, after backup):
+
+```sql
+UPDATE user_page_permissions SET page_key = 'assignment' WHERE page_key = 'delivery';
+```
+
+See also `docs/database/migrate-v2-products-assignments.sql` for the broader schema rename (products, assignments table, movements columns).

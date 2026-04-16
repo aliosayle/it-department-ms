@@ -7,7 +7,7 @@ import { PortalGridPage } from '@/components/grid/PortalGridPage'
 import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { purchasesGridConfig } from '@/pages/gridPageConfigs.stockDomain'
 import type { PurchaseListRow } from '@/mocks/domain/types'
-import { buildPurchasesForProduct, getProductById, useMockStore } from '@/mocks/mockStore'
+import { buildPurchasesForProduct, getProductById, productCatalogLabel, useMockStore } from '@/mocks/mockStore'
 import { useCan } from '@/auth/AuthContext'
 
 export function ProductPurchasesPage() {
@@ -48,7 +48,7 @@ export function ProductPurchasesPage() {
   return (
     <>
       <p className="form-page__hint" style={{ marginTop: 0 }}>
-        Purchases whose lines include <strong>{product.sku}</strong>. Open a row for bon, supplier, and
+        Purchases whose lines include <strong>{productCatalogLabel(product)}</strong>. Open a row for bon, supplier, and
         receive-into-stock.
       </p>
       <PortalGridPage

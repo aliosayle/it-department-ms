@@ -69,13 +69,16 @@ CREATE TABLE IF NOT EXISTS suppliers (
 
 CREATE TABLE IF NOT EXISTS products (
   id VARCHAR(64) NOT NULL PRIMARY KEY,
-  sku VARCHAR(191) NOT NULL,
+  reference VARCHAR(191) NOT NULL,
+  sku VARCHAR(191) NULL,
   name TEXT NOT NULL,
   brand TEXT NOT NULL DEFAULT '',
   category TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL DEFAULT '',
+  tracking_mode ENUM('quantity', 'serialized') NOT NULL DEFAULT 'quantity',
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  CONSTRAINT products_sku_unique UNIQUE (sku)
+  CONSTRAINT products_reference_unique UNIQUE (reference),
+  KEY idx_products_sku (sku)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS storage_units (
@@ -103,27 +106,19 @@ CREATE TABLE IF NOT EXISTS stock_positions (
   CONSTRAINT chk_stock_positions_qty CHECK (quantity >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS inventory_movements (
+CREATE TABLE IF NOT EXISTS serialized_assets (
   id VARCHAR(64) NOT NULL PRIMARY KEY,
   product_id VARCHAR(64) NOT NULL,
-  occurred_at DATETIME(6) NOT NULL,
-  delta INT NOT NULL,
-  reason TEXT NOT NULL,
-  note TEXT NOT NULL DEFAULT '',
-  ref_delivery_id VARCHAR(64) NULL,
-  ref_stock_position_id VARCHAR(64) NULL,
-  purchase_id VARCHAR(64) NULL,
-  personnel_id VARCHAR(64) NULL,
-  correlation_id VARCHAR(64) NULL,
-  from_storage_label TEXT NULL,
-  to_storage_label TEXT NULL,
+  identifier VARCHAR(191) NOT NULL,
+  site_id VARCHAR(64) NOT NULL,
+  storage_unit_id VARCHAR(64) NOT NULL,
+  status VARCHAR(64) NOT NULL DEFAULT 'Available',
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  CONSTRAINT fk_inventory_movements_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE RESTRICT,
-  CONSTRAINT fk_inventory_movements_personnel FOREIGN KEY (personnel_id) REFERENCES personnel (id)
+  CONSTRAINT fk_serialized_assets_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_serialized_assets_site FOREIGN KEY (site_id) REFERENCES sites (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_serialized_assets_storage FOREIGN KEY (storage_unit_id) REFERENCES storage_units (id) ON DELETE RESTRICT,
+  CONSTRAINT uq_serialized_assets_identifier UNIQUE (identifier)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE INDEX IF NOT EXISTS idx_inventory_movements_product ON inventory_movements (product_id, occurred_at DESC);
-CREATE INDEX IF NOT EXISTS idx_inventory_movements_correlation ON inventory_movements (correlation_id);
 
 CREATE TABLE IF NOT EXISTS purchases (
   id VARCHAR(64) NOT NULL PRIMARY KEY,
@@ -160,10 +155,11 @@ CREATE TABLE IF NOT EXISTS purchase_lines (
   CONSTRAINT chk_purchase_lines_price CHECK (unit_price >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS deliveries (
+CREATE TABLE IF NOT EXISTS assignments (
   id VARCHAR(64) NOT NULL PRIMARY KEY,
   source ENUM('stock', 'external') NOT NULL,
   stock_position_id VARCHAR(64) NULL,
+  serialized_asset_id VARCHAR(64) NULL,
   quantity INT NOT NULL,
   item_received_date DATE NULL,
   item_description TEXT NOT NULL DEFAULT '',
@@ -175,12 +171,46 @@ CREATE TABLE IF NOT EXISTS deliveries (
   site_id VARCHAR(64) NOT NULL,
   personnel_id VARCHAR(64) NOT NULL,
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  CONSTRAINT fk_deliveries_stock_pos FOREIGN KEY (stock_position_id) REFERENCES stock_positions (id),
-  CONSTRAINT fk_deliveries_company FOREIGN KEY (company_id) REFERENCES companies (id) ON DELETE RESTRICT,
-  CONSTRAINT fk_deliveries_site FOREIGN KEY (site_id) REFERENCES sites (id) ON DELETE RESTRICT,
-  CONSTRAINT fk_deliveries_personnel FOREIGN KEY (personnel_id) REFERENCES personnel (id) ON DELETE RESTRICT,
-  CONSTRAINT chk_deliveries_qty CHECK (quantity >= 1)
+  CONSTRAINT fk_assignments_stock_pos FOREIGN KEY (stock_position_id) REFERENCES stock_positions (id),
+  CONSTRAINT fk_assignments_serialized_asset FOREIGN KEY (serialized_asset_id) REFERENCES serialized_assets (id),
+  CONSTRAINT fk_assignments_company FOREIGN KEY (company_id) REFERENCES companies (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_assignments_site FOREIGN KEY (site_id) REFERENCES sites (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_assignments_personnel FOREIGN KEY (personnel_id) REFERENCES personnel (id) ON DELETE RESTRICT,
+  CONSTRAINT chk_assignments_qty CHECK (quantity >= 1),
+  CONSTRAINT chk_assignments_stock_source CHECK (
+    (source = 'external' AND stock_position_id IS NULL AND serialized_asset_id IS NULL)
+    OR (
+      source = 'stock'
+      AND (
+        (stock_position_id IS NOT NULL AND serialized_asset_id IS NULL)
+        OR (serialized_asset_id IS NOT NULL AND stock_position_id IS NULL)
+      )
+    )
+  )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS inventory_movements (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  product_id VARCHAR(64) NOT NULL,
+  occurred_at DATETIME(6) NOT NULL,
+  delta INT NOT NULL,
+  reason TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
+  ref_assignment_id VARCHAR(64) NULL,
+  ref_asset_id VARCHAR(64) NULL,
+  ref_stock_position_id VARCHAR(64) NULL,
+  purchase_id VARCHAR(64) NULL,
+  personnel_id VARCHAR(64) NULL,
+  correlation_id VARCHAR(64) NULL,
+  from_storage_label TEXT NULL,
+  to_storage_label TEXT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  CONSTRAINT fk_inventory_movements_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_inventory_movements_personnel FOREIGN KEY (personnel_id) REFERENCES personnel (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE INDEX IF NOT EXISTS idx_inventory_movements_product ON inventory_movements (product_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_inventory_movements_correlation ON inventory_movements (correlation_id);
 
 CREATE TABLE IF NOT EXISTS user_equipment (
   id VARCHAR(64) NOT NULL PRIMARY KEY,

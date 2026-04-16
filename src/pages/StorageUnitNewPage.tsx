@@ -71,7 +71,7 @@ export function StorageUnitNewPage() {
       {error ? <p className="form-page__error">{error}</p> : null}
       <p className="form-page__hint">
         Code must be unique per site (for example <code>A-12</code>). Use <strong>Custody</strong> for a virtual bin
-        tied to one person so deliveries from stock can move items into their custody.
+        tied to one person so assignments from stock can move items into their custody.
       </p>
       <SelectBox
         label="Site"

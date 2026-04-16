@@ -7,8 +7,8 @@ import { AssetsPage } from '@/pages/AssetsPage'
 import { CompaniesListPage } from '@/pages/CompaniesListPage'
 import { CompanyNewPage } from '@/pages/CompanyNewPage'
 import { DashboardPage } from '@/pages/DashboardPage'
-import { DeliveryListPage } from '@/pages/DeliveryListPage'
-import { DeliveryNewPage } from '@/pages/DeliveryNewPage'
+import { AssignmentListPage } from '@/pages/AssignmentListPage'
+import { AssignmentNewPage } from '@/pages/AssignmentNewPage'
 import { NetworkDevicesPage } from '@/pages/NetworkDevicesPage'
 import { AccessDeniedPage } from '@/auth/AccessDeniedPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -124,18 +124,18 @@ export function AppRoutes() {
           }
         />
         <Route
-          path="delivery"
+          path="assignments"
           element={
-            <PageGuard page="delivery">
-              <DeliveryListPage />
+            <PageGuard page="assignment">
+              <AssignmentListPage />
             </PageGuard>
           }
         />
         <Route
-          path="delivery/new"
+          path="assignments/new"
           element={
-            <PageGuard page="delivery">
-              <DeliveryNewPage />
+            <PageGuard page="assignment">
+              <AssignmentNewPage />
             </PageGuard>
           }
         />

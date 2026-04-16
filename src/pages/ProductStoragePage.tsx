@@ -7,7 +7,7 @@ import {
   storageUnitsForProductGridConfig,
   type StorageUnitDistinctRow,
 } from '@/pages/gridPageConfigs.stockDomain'
-import { getProductById, getStorageUnitsForProduct, useMockStore } from '@/mocks/mockStore'
+import { getProductById, getStorageUnitsForProduct, productCatalogLabel, useMockStore } from '@/mocks/mockStore'
 import { useCan } from '@/auth/AuthContext'
 
 export function ProductStoragePage() {
@@ -42,7 +42,7 @@ export function ProductStoragePage() {
   return (
     <>
       <p className="form-page__hint" style={{ marginTop: 0 }}>
-        Storage units that hold <strong>{product.sku}</strong> (from stock positions)
+        Storage units that hold <strong>{productCatalogLabel(product)}</strong> (from stock positions)
       </p>
       <PortalGridPage config={storageUnitsForProductGridConfig} dataSource={rows} rowActions={rowActions} />
     </>

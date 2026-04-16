@@ -52,26 +52,54 @@ export async function insertPersonnel(
 
 export async function insertProduct(
   pool: Pool,
-  row: { sku: string; name: string; brand: string; category: string; description: string },
+  row: {
+    reference: string
+    sku: string
+    name: string
+    brand: string
+    category: string
+    description: string
+    trackingMode: 'quantity' | 'serialized'
+  },
 ): Promise<Record<string, unknown>> {
-  const sku = row.sku.trim()
+  const reference = row.reference.trim()
   const name = row.name.trim()
-  if (!sku) throw Object.assign(new Error('SKU is required.'), { statusCode: 400 })
+  const skuRaw = (row.sku || '').trim()
+  const sku = skuRaw === '' ? null : skuRaw
+  if (!reference) throw Object.assign(new Error('Reference is required.'), { statusCode: 400 })
   if (!name) throw Object.assign(new Error('Name is required.'), { statusCode: 400 })
-  const [[dup]] = await pool.query<RowDataPacket[]>('SELECT id FROM products WHERE LOWER(sku) = LOWER(?)', [sku])
-  if (dup) throw Object.assign(new Error('A product with this SKU already exists.'), { statusCode: 409 })
+  const [[dupRef]] = await pool.query<RowDataPacket[]>('SELECT id FROM products WHERE LOWER(reference) = LOWER(?)', [
+    reference,
+  ])
+  if (dupRef) throw Object.assign(new Error('A product with this reference already exists.'), { statusCode: 409 })
+  if (sku) {
+    const [[dupSku]] = await pool.query<RowDataPacket[]>('SELECT id FROM products WHERE sku IS NOT NULL AND LOWER(sku) = LOWER(?)', [sku])
+    if (dupSku) throw Object.assign(new Error('A product with this SKU already exists.'), { statusCode: 409 })
+  }
+  const trackingMode = row.trackingMode === 'serialized' ? 'serialized' : 'quantity'
   const id = nextId('pr')
   await pool.query(
-    'INSERT INTO products (id, sku, name, brand, category, description) VALUES (?,?,?,?,?,?)',
-    [id, sku, name, (row.brand || '').trim(), (row.category || '').trim(), (row.description || '').trim()],
+    'INSERT INTO products (id, reference, sku, name, brand, category, description, tracking_mode) VALUES (?,?,?,?,?,?,?,?)',
+    [
+      id,
+      reference,
+      sku,
+      name,
+      (row.brand || '').trim(),
+      (row.category || '').trim(),
+      (row.description || '').trim(),
+      trackingMode,
+    ],
   )
   return {
     id,
+    reference,
     sku,
     name,
     brand: (row.brand || '').trim(),
     category: (row.category || '').trim(),
     description: (row.description || '').trim(),
+    trackingMode,
   }
 }
 

@@ -1,0 +1,10 @@
+-- Manual notes for databases created before the v2 canonical schema.
+-- For an **executable** MariaDB script (rename deliveries→assignments, movement
+-- columns, products reference/SKU/tracking, serialized_assets, RBAC key), use:
+--
+--   migrate-v2-legacy-mariadb-to-current.sql
+--
+-- That procedure is idempotent (safe to re-run). With **existing product rows**,
+-- review the `UPDATE products SET reference = sku` backfill in that file.
+--
+-- Backup first. Prefer `schema-mariadb.sql` on a brand-new database when you can.

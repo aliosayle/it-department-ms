@@ -35,8 +35,8 @@ export function StorageUnitsListPage() {
     <>
       <div className="list-toolbar">
         <p className="form-page__hint" style={{ margin: 0 }}>
-          Bins and shelves belong to a site; <strong>custody</strong> rows are tied to one person for deliveries from
-          stock.
+          Bins and shelves belong to a site; <strong>custody</strong> rows are tied to one person so assignments from
+          stock can land in their custody bin.
         </p>
         {perm.create ? (
           <Link to="/stock/storage-units/new">

@@ -4,7 +4,7 @@ import Button from 'devextreme-react/button'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
 import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { movementStatementGridConfig } from '@/pages/gridPageConfigs.stockDomain'
-import { buildMovementStatementRows, getProductById, useMockStore } from '@/mocks/mockStore'
+import { buildMovementStatementRows, getProductById, productCatalogLabel, useMockStore } from '@/mocks/mockStore'
 import type { MovementStatementRow } from '@/mocks/domain/types'
 import { useCan } from '@/auth/AuthContext'
 
@@ -21,7 +21,8 @@ function buildStatementCsv(rows: MovementStatementRow[]): string {
     'delta',
     'reason',
     'note',
-    'deliveryRef',
+    'assignmentRef',
+    'assetRef',
     'purchaseRef',
     'transferGroup',
   ]
@@ -35,7 +36,8 @@ function buildStatementCsv(rows: MovementStatementRow[]): string {
         String(r.delta),
         r.reason,
         r.note,
-        r.refDeliveryId ?? '',
+        r.refAssignmentId ?? '',
+        r.refAssetId ?? '',
         r.refPurchaseId ?? '',
         r.correlationId ?? '',
       ]
@@ -96,7 +98,7 @@ export function ProductHistoryPage() {
   return (
     <>
       <p className="form-page__hint" style={{ marginTop: 0 }}>
-        Movement statement for <strong>{product.sku}</strong> (chronological, oldest first).
+        Movement statement for <strong>{productCatalogLabel(product)}</strong> (chronological, oldest first).
       </p>
       <div className="list-toolbar">
         <Button text="Copy statement as CSV" onClick={() => void copyCsv()} />

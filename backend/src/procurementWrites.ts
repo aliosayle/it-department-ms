@@ -1,14 +1,17 @@
 import type { Pool, RowDataPacket } from 'mysql2/promise'
 import { nextId } from './id.js'
-import { receiveStockInConn } from './inventoryWrites.js'
+import { receiveSerializedInConn, receiveStockInConn } from './inventoryWrites.js'
 
 function fmtLabel(code: string, label: string): string {
   return `${code} (${label})`
 }
 
-export type CreateDeliveryBody = {
+const MOV_INS = `INSERT INTO inventory_movements (id, product_id, occurred_at, delta, reason, note, ref_assignment_id, ref_asset_id, ref_stock_position_id, purchase_id, personnel_id, correlation_id, from_storage_label, to_storage_label)`
+
+export type CreateAssignmentBody = {
   source: 'stock' | 'external'
   stockPositionId: string | null
+  serializedAssetId: string | null
   quantity: number
   itemReceivedDate: string | null
   itemDescription: string
@@ -21,10 +24,10 @@ export type CreateDeliveryBody = {
   personnelId: string
 }
 
-export async function createDeliveryTx(
+export async function createAssignmentTx(
   pool: Pool,
-  input: CreateDeliveryBody,
-): Promise<{ ok: true; delivery: Record<string, unknown> } | { ok: false; error: string }> {
+  input: CreateAssignmentBody,
+): Promise<{ ok: true; assignment: Record<string, unknown> } | { ok: false; error: string }> {
   if (!input.companyId || !input.siteId || !input.personnelId) {
     return { ok: false, error: 'Company, site, and recipient are required.' }
   }
@@ -61,48 +64,70 @@ export async function createDeliveryTx(
       return { ok: false, error: 'Quantity must be at least 1.' }
     }
 
+    const serializedAssetIdIn = (input.serializedAssetId || '').trim() || null
+
     if (input.source === 'stock') {
-      if (!input.stockPositionId) {
-        await conn.rollback()
-        return { ok: false, error: 'Select a stock position.' }
-      }
-      const q = Math.floor(Number(input.quantity))
-      if (q < 1) {
-        await conn.rollback()
-        return { ok: false, error: 'Quantity must be at least 1.' }
-      }
-      const [[pos]] = await conn.query<RowDataPacket[]>(
-        'SELECT id, product_id AS productId, storage_unit_id AS storageUnitId, quantity FROM stock_positions WHERE id = ? FOR UPDATE',
-        [input.stockPositionId],
-      )
-      if (!pos) {
-        await conn.rollback()
-        return { ok: false, error: 'Stock position not found.' }
-      }
-      if (q > Number(pos.quantity)) {
-        await conn.rollback()
-        return { ok: false, error: `Insufficient quantity (available: ${pos.quantity}).` }
-      }
-      const [[whSite]] = await conn.query<RowDataPacket[]>(
-        'SELECT site_id AS siteId FROM storage_units WHERE id = ?',
-        [pos.storageUnitId],
-      )
-      if (!whSite || String(whSite.siteId) !== input.siteId) {
-        await conn.rollback()
-        return {
-          ok: false,
-          error: 'Stock position must be in a storage unit at the selected delivery site.',
-        }
-      }
-      const [custodyRows] = await conn.query<RowDataPacket[]>(
-        'SELECT id, code, label FROM storage_units WHERE personnel_id = ? AND kind = ? LIMIT 1',
+      const [custodyProbe] = await conn.query<RowDataPacket[]>(
+        'SELECT id FROM storage_units WHERE personnel_id = ? AND kind = ? LIMIT 1',
         [input.personnelId, 'custody'],
       )
-      if (!custodyRows.length) {
+      if (!custodyProbe.length) {
         await conn.rollback()
         return {
           ok: false,
           error: 'Recipient has no custody storage unit. Add a custody bin for this person in storage units.',
+        }
+      }
+
+      if (serializedAssetIdIn) {
+        const q = Math.floor(Number(input.quantity))
+        if (q !== 1) {
+          await conn.rollback()
+          return { ok: false, error: 'Serialized assignment quantity must be 1.' }
+        }
+      } else {
+        if (!input.stockPositionId) {
+          await conn.rollback()
+          return { ok: false, error: 'Select a stock position or a serialized asset.' }
+        }
+        const q = Math.floor(Number(input.quantity))
+        if (q < 1) {
+          await conn.rollback()
+          return { ok: false, error: 'Quantity must be at least 1.' }
+        }
+        const [[pos]] = await conn.query<RowDataPacket[]>(
+          'SELECT id, product_id AS productId, storage_unit_id AS storageUnitId, quantity FROM stock_positions WHERE id = ? FOR UPDATE',
+          [input.stockPositionId],
+        )
+        if (!pos) {
+          await conn.rollback()
+          return { ok: false, error: 'Stock position not found.' }
+        }
+        if (q > Number(pos.quantity)) {
+          await conn.rollback()
+          return { ok: false, error: `Insufficient quantity (available: ${pos.quantity}).` }
+        }
+        const [[whSite]] = await conn.query<RowDataPacket[]>(
+          'SELECT site_id AS siteId FROM storage_units WHERE id = ?',
+          [pos.storageUnitId],
+        )
+        if (!whSite || String(whSite.siteId) !== input.siteId) {
+          await conn.rollback()
+          return {
+            ok: false,
+            error: 'Stock position must be in a storage unit at the selected assignment site.',
+          }
+        }
+        const [[pr]] = await conn.query<RowDataPacket[]>(
+          'SELECT tracking_mode AS trackingMode FROM products WHERE id = ?',
+          [pos.productId],
+        )
+        if (pr && String(pr.trackingMode) === 'serialized') {
+          await conn.rollback()
+          return {
+            ok: false,
+            error: 'This product is serialized. Assign using a serialized asset (MAC/serial), not a bulk stock position.',
+          }
         }
       }
     }
@@ -113,18 +138,20 @@ export async function createDeliveryTx(
     const deliveredTo = (input.deliveredTo || '').trim() || String(pname?.fullName ?? '')
     const siteLabel = (input.site || '').trim() || String(siteRow.name ?? '')
 
-    const deliveryId = nextId('del')
-    const stockPid = input.source === 'stock' ? input.stockPositionId : null
+    const assignmentId = nextId('asn')
+    const stockPid = input.source === 'stock' && !serializedAssetIdIn ? input.stockPositionId : null
+    const serializedAid = input.source === 'stock' ? serializedAssetIdIn : null
     const qty = Math.floor(Number(input.quantity))
     const itemReceivedDate = input.source === 'stock' ? null : input.itemReceivedDate
 
     await conn.query(
-      `INSERT INTO deliveries (id, source, stock_position_id, quantity, item_received_date, item_description, delivered_to, site_label, date_delivered, description, company_id, site_id, personnel_id)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO assignments (id, source, stock_position_id, serialized_asset_id, quantity, item_received_date, item_description, delivered_to, site_label, date_delivered, description, company_id, site_id, personnel_id)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        deliveryId,
+        assignmentId,
         input.source,
         stockPid,
+        serializedAid,
         qty,
         itemReceivedDate,
         input.itemDescription,
@@ -138,7 +165,92 @@ export async function createDeliveryTx(
       ],
     )
 
-    if (input.source === 'stock' && input.stockPositionId) {
+    if (input.source === 'stock' && serializedAid) {
+      const [[custodySu]] = await conn.query<RowDataPacket[]>(
+        'SELECT id, code, label FROM storage_units WHERE personnel_id = ? AND kind = ? LIMIT 1 FOR UPDATE',
+        [input.personnelId, 'custody'],
+      )
+      if (!custodySu) {
+        await conn.rollback()
+        return { ok: false, error: 'Custody storage missing.' }
+      }
+      const [[asset]] = await conn.query<RowDataPacket[]>(
+        `SELECT a.id, a.product_id AS productId, a.identifier, a.storage_unit_id AS storageUnitId,
+                su.kind AS storageKind, su.site_id AS storageSiteId, p.tracking_mode AS trackingMode
+         FROM serialized_assets a
+         JOIN storage_units su ON su.id = a.storage_unit_id
+         JOIN products p ON p.id = a.product_id
+         WHERE a.id = ? FOR UPDATE`,
+        [serializedAid],
+      )
+      if (!asset) {
+        await conn.rollback()
+        return { ok: false, error: 'Serialized asset not found.' }
+      }
+      if (String(asset.trackingMode) !== 'serialized') {
+        await conn.rollback()
+        return { ok: false, error: 'Product is not configured for serialized tracking.' }
+      }
+      if (String(asset.storageKind) === 'custody') {
+        await conn.rollback()
+        return { ok: false, error: 'Asset is already in custody storage.' }
+      }
+      if (String(asset.storageSiteId) !== input.siteId) {
+        await conn.rollback()
+        return { ok: false, error: 'Asset must be at the selected site.' }
+      }
+      const productId = String(asset.productId)
+      const [[fromSu]] = await conn.query<RowDataPacket[]>('SELECT code, label FROM storage_units WHERE id = ?', [
+        asset.storageUnitId,
+      ])
+      const fromLabel = fromSu ? fmtLabel(String(fromSu.code), String(fromSu.label)) : '—'
+      const custodyLabel = fmtLabel(String(custodySu.code), String(custodySu.label))
+      const recipientName = String(pname?.fullName ?? 'recipient')
+      const noteIn = input.description || `Issued to ${recipientName}`
+      const noteOut = input.description || 'Serialized assignment out'
+      await conn.query(
+        'UPDATE serialized_assets SET storage_unit_id = ?, status = ? WHERE id = ?',
+        [custodySu.id, 'Issued', serializedAid],
+      )
+      const inMov = nextId('mov')
+      const outMov = nextId('mov')
+      await conn.query(
+        `${MOV_INS} VALUES (?,?,DATE_ADD(NOW(6), INTERVAL 1 MICROSECOND),?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          inMov,
+          productId,
+          1,
+          'custody_in',
+          noteIn,
+          assignmentId,
+          serializedAid,
+          null,
+          null,
+          input.personnelId,
+          null,
+          fromLabel,
+          custodyLabel,
+        ],
+      )
+      await conn.query(
+        `${MOV_INS} VALUES (?,?,NOW(6),?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          outMov,
+          productId,
+          -1,
+          'assignment_out',
+          noteOut,
+          assignmentId,
+          serializedAid,
+          null,
+          null,
+          input.personnelId,
+          null,
+          fromLabel,
+          custodyLabel,
+        ],
+      )
+    } else if (input.source === 'stock' && input.stockPositionId) {
       const [[pos]] = await conn.query<RowDataPacket[]>(
         'SELECT id, product_id AS productId, storage_unit_id AS storageUnitId, quantity FROM stock_positions WHERE id = ? FOR UPDATE',
         [input.stockPositionId],
@@ -188,24 +300,37 @@ export async function createDeliveryTx(
       }
 
       const noteIn = input.description || `Issued to ${recipientName}`
-      const noteOut = input.description || 'Outbound delivery'
+      const noteOut = input.description || 'Outbound assignment'
       const inMov = nextId('mov')
       const outMov = nextId('mov')
       await conn.query(
-        `INSERT INTO inventory_movements (id, product_id, occurred_at, delta, reason, note, ref_delivery_id, ref_stock_position_id, purchase_id, personnel_id, correlation_id, from_storage_label, to_storage_label)
-         VALUES (?,?,DATE_ADD(NOW(6), INTERVAL 1 MICROSECOND),?,?,?,?,?,?,?,?,?,?)`,
-        [inMov, productId, q, 'custody_in', noteIn, deliveryId, custodyPositionId, null, input.personnelId, null, fromLabel, custodyLabel],
+        `${MOV_INS} VALUES (?,?,DATE_ADD(NOW(6), INTERVAL 1 MICROSECOND),?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          inMov,
+          productId,
+          q,
+          'custody_in',
+          noteIn,
+          assignmentId,
+          null,
+          custodyPositionId,
+          null,
+          input.personnelId,
+          null,
+          fromLabel,
+          custodyLabel,
+        ],
       )
       await conn.query(
-        `INSERT INTO inventory_movements (id, product_id, occurred_at, delta, reason, note, ref_delivery_id, ref_stock_position_id, purchase_id, personnel_id, correlation_id, from_storage_label, to_storage_label)
-         VALUES (?,?,NOW(6),?,?,?,?,?,?,?,?,?,?)`,
+        `${MOV_INS} VALUES (?,?,NOW(6),?,?,?,?,?,?,?,?,?,?,?)`,
         [
           outMov,
           productId,
           -q,
-          'delivery_out',
+          'assignment_out',
           noteOut,
-          deliveryId,
+          assignmentId,
+          null,
           input.stockPositionId,
           null,
           input.personnelId,
@@ -218,10 +343,11 @@ export async function createDeliveryTx(
 
     await conn.commit()
 
-    const delivery = {
-      id: deliveryId,
+    const assignment = {
+      id: assignmentId,
       source: input.source,
       stockPositionId: stockPid,
+      serializedAssetId: serializedAid,
       quantity: qty,
       itemReceivedDate,
       itemDescription: input.itemDescription,
@@ -233,7 +359,7 @@ export async function createDeliveryTx(
       siteId: input.siteId,
       personnelId: input.personnelId,
     }
-    return { ok: true, delivery }
+    return { ok: true, assignment }
   } catch (e) {
     await conn.rollback()
     return { ok: false, error: e instanceof Error ? e.message : 'Transaction failed' }
@@ -405,7 +531,7 @@ export async function receivePurchaseTx(pool: Pool, purchaseId: string): Promise
     }
     const purchaseSiteId = String(purchase.siteId)
     const [lines] = await conn.query<RowDataPacket[]>(
-      'SELECT product_id AS productId, quantity, storage_unit_id AS storageUnitId FROM purchase_lines WHERE purchase_id = ?',
+      'SELECT id, product_id AS productId, quantity, storage_unit_id AS storageUnitId FROM purchase_lines WHERE purchase_id = ?',
       [purchaseId],
     )
     if (!lines.length) {
@@ -431,18 +557,40 @@ export async function receivePurchaseTx(pool: Pool, purchaseId: string): Promise
     const inv = String(purchase.supplierInvoiceRef ?? '').trim()
     for (const line of lines) {
       const note = `Bon ${bon}${inv ? ` · Inv ${inv}` : ''} · Purchase ${purchaseId}`
-      const r = await receiveStockInConn(conn, {
-        productId: String(line.productId),
-        storageUnitId: String(line.storageUnitId),
-        quantity: Number(line.quantity),
-        status: 'Available',
-        reason: 'Purchase',
-        note,
-        purchaseId,
-      })
-      if (!r.ok) {
-        await conn.rollback()
-        return r
+      const [[pr]] = await conn.query<RowDataPacket[]>(
+        'SELECT tracking_mode AS trackingMode FROM products WHERE id = ?',
+        [line.productId],
+      )
+      const isSerialized = pr && String(pr.trackingMode) === 'serialized'
+      if (isSerialized) {
+        const q = Math.floor(Number(line.quantity))
+        const identifiers = Array.from({ length: q }, (_, i) => `PO-${String(line.id)}-${i + 1}`)
+        const r = await receiveSerializedInConn(conn, {
+          productId: String(line.productId),
+          storageUnitId: String(line.storageUnitId),
+          identifiers,
+          reason: 'Purchase',
+          note,
+          purchaseId,
+        })
+        if (!r.ok) {
+          await conn.rollback()
+          return r
+        }
+      } else {
+        const r = await receiveStockInConn(conn, {
+          productId: String(line.productId),
+          storageUnitId: String(line.storageUnitId),
+          quantity: Number(line.quantity),
+          status: 'Available',
+          reason: 'Purchase',
+          note,
+          purchaseId,
+        })
+        if (!r.ok) {
+          await conn.rollback()
+          return r
+        }
       }
     }
 

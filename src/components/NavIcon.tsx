@@ -20,7 +20,7 @@ export type NavIconId =
   | 'storageUnits'
   | 'products'
   | 'purchases'
-  | 'delivery'
+  | 'assignment'
   | 'suppliers'
   | 'companies'
   | 'sites'
@@ -79,7 +79,7 @@ export function NavIcon({ id, className }: { id: NavIconId; className?: string }
           <path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4" />
         </svg>
       )
-    case 'delivery':
+    case 'assignment':
       return (
         <svg {...common} className={c}>
           <path d="M5 18H3v-8l2-3h8v11M5 18v-3h12v3M15 18a2 2 0 100-4 2 2 0 000 4zM5 18a2 2 0 100-4 2 2 0 000 4z" />

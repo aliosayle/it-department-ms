@@ -4,7 +4,8 @@ export { subscribeApiForbidden, notifyApiForbidden } from '@/api/forbiddenBus'
 export {
   portalReceiveStock,
   portalTransferStock,
-  portalCreateDelivery,
+  portalCreateAssignment,
+  portalReceiveSerialized,
   portalCreatePurchase,
   portalReceivePurchase,
   portalCreatePortalUser,

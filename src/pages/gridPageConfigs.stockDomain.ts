@@ -1,7 +1,7 @@
 import type { PortalGridPageConfig } from '@/components/grid/portalGridTypes'
 import type {
   Company,
-  Delivery,
+  Assignment,
   MovementStatementRow,
   Personnel,
   Product,
@@ -56,8 +56,10 @@ export const productsGridConfig: PortalGridPageConfig<Product> = {
   dataSource: empty as Product[],
   keyExpr: 'id',
   columns: [
-    { dataField: 'sku', caption: 'SKU', width: 140 },
+    { dataField: 'reference', caption: 'Reference', width: 140 },
+    { dataField: 'sku', caption: 'SKU (opt.)', width: 120 },
     { dataField: 'name', caption: 'Name', minWidth: 200 },
+    { dataField: 'trackingMode', caption: 'Tracking', width: 100 },
     { dataField: 'brand', caption: 'Brand', width: 110 },
     { dataField: 'category', caption: 'Category', width: 120 },
   ],
@@ -67,7 +69,7 @@ export const stockOverviewGridConfig: PortalGridPageConfig<StockOverviewRow> = {
   dataSource: empty as StockOverviewRow[],
   keyExpr: 'id',
   columns: [
-    { dataField: 'productSku', caption: 'SKU', width: 130 },
+    { dataField: 'productSku', caption: 'Ref / SKU', width: 130 },
     { dataField: 'productName', caption: 'Product', minWidth: 160 },
     { dataField: 'storageCode', caption: 'Storage', minWidth: 180 },
     { dataField: 'siteName', caption: 'Site', minWidth: 120 },
@@ -81,7 +83,7 @@ export const stockProductSummaryGridConfig: PortalGridPageConfig<StockProductSum
   dataSource: empty as StockProductSummaryRow[],
   keyExpr: 'id',
   columns: [
-    { dataField: 'productSku', caption: 'SKU', width: 130 },
+    { dataField: 'productSku', caption: 'Ref / SKU', width: 130 },
     { dataField: 'productName', caption: 'Product', minWidth: 200 },
     { dataField: 'totalQuantity', caption: 'Total qty', width: 100, dataType: 'number' },
   ],
@@ -110,7 +112,8 @@ export const movementStatementGridConfig: PortalGridPageConfig<MovementStatement
     { dataField: 'delta', caption: 'Delta', width: 70, dataType: 'number' },
     { dataField: 'reason', caption: 'Reason', width: 120 },
     { dataField: 'note', caption: 'Note', minWidth: 140 },
-    { dataField: 'refDeliveryId', caption: 'Delivery', width: 110 },
+    { dataField: 'refAssignmentId', caption: 'Assignment', width: 110 },
+    { dataField: 'refAssetId', caption: 'Asset', width: 100 },
     { dataField: 'refPurchaseId', caption: 'Purchase', width: 120 },
     { dataField: 'correlationId', caption: 'Transfer group', width: 140 },
   ],
@@ -168,7 +171,7 @@ export const purchaseLinesDetailGridConfig: PortalGridPageConfig<PurchaseLineDet
   dataSource: empty as PurchaseLineDetailRow[],
   keyExpr: 'id',
   columns: [
-    { dataField: 'productSku', caption: 'SKU', width: 120 },
+    { dataField: 'productSku', caption: 'Ref / SKU', width: 120 },
     { dataField: 'productName', caption: 'Product', minWidth: 160 },
     { dataField: 'quantity', caption: 'Qty', width: 70, dataType: 'number' },
     { dataField: 'unitPrice', caption: 'Unit price', dataType: 'number', width: 100 },
@@ -178,12 +181,13 @@ export const purchaseLinesDetailGridConfig: PortalGridPageConfig<PurchaseLineDet
   ],
 }
 
-export const deliveriesGridConfigV2: PortalGridPageConfig<Delivery> = {
-  dataSource: empty as Delivery[],
+export const assignmentsGridConfigV2: PortalGridPageConfig<Assignment> = {
+  dataSource: empty as Assignment[],
   keyExpr: 'id',
   columns: [
     { dataField: 'source', caption: 'Source', width: 90 },
     { dataField: 'stockPositionId', caption: 'Stock pos.', width: 110 },
+    { dataField: 'serializedAssetId', caption: 'Asset', width: 110 },
     { dataField: 'quantity', caption: 'Qty', width: 70, dataType: 'number' },
     {
       dataField: 'itemReceivedDate',
@@ -193,11 +197,11 @@ export const deliveriesGridConfigV2: PortalGridPageConfig<Delivery> = {
       width: 110,
     },
     { dataField: 'itemDescription', caption: 'Item', minWidth: 140 },
-    { dataField: 'deliveredTo', caption: 'Delivered to', minWidth: 160 },
+    { dataField: 'deliveredTo', caption: 'Assigned to', minWidth: 160 },
     { dataField: 'site', caption: 'Site', minWidth: 140 },
     {
       dataField: 'dateDelivered',
-      caption: 'Delivered',
+      caption: 'Assigned',
       dataType: 'date',
       format: 'yyyy-MM-dd',
       width: 110,
@@ -214,7 +218,8 @@ export const productMovementGridConfig: PortalGridPageConfig<ProductMovement> = 
     { dataField: 'delta', caption: 'Delta', width: 80, dataType: 'number' },
     { dataField: 'reason', caption: 'Reason', width: 120 },
     { dataField: 'note', caption: 'Note', minWidth: 160 },
-    { dataField: 'refDeliveryId', caption: 'Delivery ref', width: 120 },
+    { dataField: 'refAssignmentId', caption: 'Assignment', width: 120 },
+    { dataField: 'refAssetId', caption: 'Asset', width: 100 },
   ],
 }
 

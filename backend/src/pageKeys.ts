@@ -7,7 +7,7 @@ export const ALL_PAGE_KEYS = [
   'stockTransfer',
   'storageUnits',
   'products',
-  'delivery',
+  'assignment',
   'companies',
   'sites',
   'personnel',

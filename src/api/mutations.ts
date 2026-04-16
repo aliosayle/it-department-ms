@@ -8,10 +8,10 @@ import { isLiveApi } from '@/api/config'
 import { isPortalApiError } from '@/api/errors'
 import { queryClient } from '@/lib/queryClient'
 import type {
+  Assignment,
   Company,
-  CreateDeliveryInput,
+  CreateAssignmentInput,
   CreatePurchaseInput,
-  Delivery,
   PageCrud,
   PageKey,
   Product,
@@ -21,7 +21,7 @@ import type {
   Supplier,
   TransferStockInput,
 } from '@/mocks/domain/types'
-import type { CreateDeliveryResult, CreatePurchaseResult, ReceivePurchaseResult } from '@/mocks/mockStore'
+import type { CreateAssignmentResult, CreatePurchaseResult, ReceivePurchaseResult } from '@/mocks/mockStore'
 
 const NEED_API = 'Set VITE_API_BASE_URL and sign in to use this action.'
 
@@ -57,15 +57,33 @@ export async function portalTransferStock(
   }
 }
 
-export async function portalCreateDelivery(input: CreateDeliveryInput): Promise<CreateDeliveryResult> {
+export async function portalCreateAssignment(input: CreateAssignmentInput): Promise<CreateAssignmentResult> {
   if (!isLiveApi()) return { ok: false, error: NEED_API }
   try {
-    const delivery = await apiPostJson<Delivery>('/deliveries', input)
-    if (!delivery?.id) return { ok: false, error: 'Invalid response from server.' }
+    const assignment = await apiPostJson<Assignment>('/assignments', input)
+    if (!assignment?.id) return { ok: false, error: 'Invalid response from server.' }
     void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
-    return { ok: true, delivery }
+    return { ok: true, assignment }
   } catch (e) {
-    return mapLiveFailure(e) as CreateDeliveryResult
+    return mapLiveFailure(e) as CreateAssignmentResult
+  }
+}
+
+export async function portalReceiveSerialized(input: {
+  productId: string
+  storageUnitId: string
+  identifiers: string[]
+  reason: string
+  note: string
+  purchaseId?: string | null
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isLiveApi()) return { ok: false, error: NEED_API }
+  try {
+    await apiPostJson('/inventory/receive-serialized', input)
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    return { ok: true }
+  } catch (e) {
+    return mapLiveFailure(e)
   }
 }
 
@@ -195,15 +213,20 @@ export async function portalAddSupplier(
 }
 
 export async function portalAddProduct(input: {
-  sku: string
+  reference: string
+  sku?: string
   name: string
   brand?: string
   category?: string
   description?: string
+  trackingMode?: 'quantity' | 'serialized'
 }): Promise<{ ok: true; product: Product } | { ok: false; error: string }> {
   if (!isLiveApi()) return { ok: false, error: NEED_API }
   try {
-    const product = await apiPostJson<Product>('/products', input)
+    const product = await apiPostJson<Product>('/products', {
+      ...input,
+      trackingMode: input.trackingMode ?? 'quantity',
+    })
     if (!product?.id) return { ok: false, error: 'Invalid response from server.' }
     void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     return { ok: true, product }

@@ -7,8 +7,8 @@ import { pool } from './db.js'
 import { signAccess, signRefresh, verifyToken } from './authJwt.js'
 import { loadBootstrapSnapshot, getUserPermissions, assertPermission } from './bootstrapRepo.js'
 import type { PageCrud, PageKey } from './pageKeys.js'
-import { receiveStockTx, transferStockTx } from './inventoryWrites.js'
-import { createDeliveryTx, createPurchaseTx, receivePurchaseTx } from './procurementWrites.js'
+import { receiveSerializedTx, receiveStockTx, transferStockTx } from './inventoryWrites.js'
+import { createAssignmentTx, createPurchaseTx, receivePurchaseTx } from './procurementWrites.js'
 import {
   insertCompany,
   insertPersonnel,
@@ -154,6 +154,22 @@ export async function buildApp() {
         return reply.code(204).send()
       })
 
+      r.post('/inventory/receive-serialized', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'stockReceive', 'create')
+        const b = req.body as Record<string, unknown>
+        const ids = Array.isArray(b.identifiers) ? (b.identifiers as unknown[]).map((x) => String(x ?? '')) : []
+        const result = await receiveSerializedTx(pool, {
+          productId: String(b.productId ?? ''),
+          storageUnitId: String(b.storageUnitId ?? ''),
+          identifiers: ids,
+          reason: String(b.reason ?? 'Other'),
+          note: String(b.note ?? ''),
+          purchaseId: (b.purchaseId as string | null | undefined) ?? null,
+        })
+        if (!result.ok) return reply.code(400).send({ error: 'bad_request', message: result.error })
+        return reply.code(204).send()
+      })
+
       r.post('/inventory/transfer', { preHandler: requireAuth }, async (req, reply) => {
         assertPermission(req.auth!.perms, 'stockTransfer', 'create')
         const b = req.body as Record<string, unknown>
@@ -167,12 +183,13 @@ export async function buildApp() {
         return reply.code(204).send()
       })
 
-      r.post('/deliveries', { preHandler: requireAuth }, async (req, reply) => {
-        assertPermission(req.auth!.perms, 'delivery', 'create')
+      r.post('/assignments', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'assignment', 'create')
         const b = req.body as Record<string, unknown>
-        const result = await createDeliveryTx(pool, {
+        const result = await createAssignmentTx(pool, {
           source: b.source === 'external' ? 'external' : 'stock',
           stockPositionId: (b.stockPositionId as string | null) ?? null,
+          serializedAssetId: (b.serializedAssetId as string | null) ?? null,
           quantity: Number(b.quantity),
           itemReceivedDate: (b.itemReceivedDate as string | null) ?? null,
           itemDescription: String(b.itemDescription ?? ''),
@@ -185,7 +202,7 @@ export async function buildApp() {
           personnelId: String(b.personnelId ?? ''),
         })
         if (!result.ok) return reply.code(400).send({ error: 'bad_request', message: result.error })
-        return result.delivery
+        return result.assignment
       })
 
       r.post('/purchases', { preHandler: requireAuth }, async (req, reply) => {
@@ -284,11 +301,13 @@ export async function buildApp() {
         const b = req.body as Record<string, string | undefined>
         try {
           return await insertProduct(pool, {
+            reference: String(b.reference ?? ''),
             sku: String(b.sku ?? ''),
             name: String(b.name ?? ''),
             brand: String(b.brand ?? ''),
             category: String(b.category ?? ''),
             description: String(b.description ?? ''),
+            trackingMode: String(b.trackingMode ?? 'quantity') === 'serialized' ? 'serialized' : 'quantity',
           })
         } catch (e) {
           const err = e as Error & { statusCode?: number }

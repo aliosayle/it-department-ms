@@ -32,13 +32,29 @@ export type StorageUnit = {
   personnelId?: string
 }
 
+export type ProductTrackingMode = 'quantity' | 'serialized'
+
 export type Product = {
   id: string
-  sku: string
+  /** Stable internal / catalog reference (required). */
+  reference: string
+  /** Optional vendor SKU. */
+  sku: string | null
   name: string
   brand: string
   category: string
   description: string
+  trackingMode: ProductTrackingMode
+}
+
+export type SerializedAsset = {
+  id: string
+  productId: string
+  identifier: string
+  siteId: string
+  storageUnitId: string
+  status: string
+  createdAt?: string
 }
 
 export type StockPosition = {
@@ -55,7 +71,8 @@ export type ProductMovement = {
   at: string
   delta: number
   reason: string
-  refDeliveryId: string | null
+  refAssignmentId: string | null
+  refAssetId: string | null
   refStockPositionId: string | null
   refPurchaseId?: string | null
   note: string
@@ -86,12 +103,13 @@ export type ReceiveStockInput = {
   purchaseId?: string | null
 }
 
-export type DeliverySource = 'stock' | 'external'
+export type AssignmentSource = 'stock' | 'external'
 
-export type Delivery = {
+export type Assignment = {
   id: string
-  source: DeliverySource
+  source: AssignmentSource
   stockPositionId: string | null
+  serializedAssetId: string | null
   quantity: number
   itemReceivedDate: string | null
   itemDescription: string
@@ -105,9 +123,10 @@ export type Delivery = {
   personnelId: string
 }
 
-export type CreateDeliveryInput = {
-  source: DeliverySource
+export type CreateAssignmentInput = {
+  source: AssignmentSource
   stockPositionId: string | null
+  serializedAssetId?: string | null
   quantity: number
   itemReceivedDate: string | null
   itemDescription: string
@@ -268,7 +287,7 @@ export type PageKey =
   | 'stockTransfer'
   | 'storageUnits'
   | 'products'
-  | 'delivery'
+  | 'assignment'
   | 'companies'
   | 'sites'
   | 'personnel'
@@ -302,7 +321,8 @@ export type MovementStatementRow = {
   delta: number
   reason: string
   note: string
-  refDeliveryId: string | null
+  refAssignmentId: string | null
+  refAssetId: string | null
   refStockPositionId: string | null
   refPurchaseId: string | null
   correlationId?: string

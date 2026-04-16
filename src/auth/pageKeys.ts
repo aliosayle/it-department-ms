@@ -9,7 +9,7 @@ export const ALL_PAGE_KEYS: PageKey[] = [
   'stockTransfer',
   'storageUnits',
   'products',
-  'delivery',
+  'assignment',
   'companies',
   'sites',
   'personnel',

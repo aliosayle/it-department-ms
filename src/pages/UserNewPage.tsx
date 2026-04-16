@@ -21,7 +21,10 @@ export function UserNewPage() {
 
   const submit = async () => {
     setError(null)
-    if (!perm.create) return
+    if (!perm.create) {
+      setError('You do not have permission to create users.')
+      return
+    }
     if (!live) {
       setError('Creating users requires the REST API (VITE_API_BASE_URL).')
       return

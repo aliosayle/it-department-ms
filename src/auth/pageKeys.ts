@@ -40,9 +40,26 @@ export function mergeFromPartial(
 ): Record<PageKey, PageCrud> {
   const base = denyAllPermissions()
   if (!partial) return base
+
+  type P = Partial<Record<PageKey, PageCrud>> & Partial<{ delivery: PageCrud }>
+  const p = { ...partial } as P
+  if (p.delivery) {
+    const d = p.delivery
+    const a = p.assignment
+    p.assignment = a
+      ? {
+          view: a.view || d.view,
+          edit: a.edit || d.edit,
+          delete: a.delete || d.delete,
+          create: a.create || d.create,
+        }
+      : d
+    delete p.delivery
+  }
+
   for (const k of ALL_PAGE_KEYS) {
-    const p = partial[k]
-    if (p) base[k] = { ...base[k], ...p }
+    const row = p[k]
+    if (row) base[k] = { ...base[k], ...row }
   }
   return base
 }

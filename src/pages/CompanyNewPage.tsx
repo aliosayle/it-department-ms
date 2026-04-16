@@ -15,8 +15,14 @@ export function CompanyNewPage() {
 
   const submit = async () => {
     setError(null)
-    if (!perm.create) return
-    if (!name.trim()) return
+    if (!perm.create) {
+      setError('You do not have permission to create companies. Sign in again after the server update, or ask an admin to grant the Companies page.')
+      return
+    }
+    if (!name.trim()) {
+      setError('Name is required.')
+      return
+    }
     try {
       await portalAddCompany(name, notes)
       navigate('/master-data/companies')

@@ -44,3 +44,33 @@ export function mergePartial(partial?: Partial<Record<PageKey, PageCrud>>): Reco
   }
   return base
 }
+
+/** Map legacy `delivery` → `assignment`; drop unknown keys; OR-merge duplicate page rows. */
+export function permissionRowsToPartial(
+  rows: ReadonlyArray<{
+    pageKey: string
+    view: boolean
+    edit: boolean
+    delete: boolean
+    create: boolean
+  }>,
+): Partial<Record<PageKey, PageCrud>> {
+  const partial: Partial<Record<PageKey, PageCrud>> = {}
+  for (const r of rows) {
+    let pk = String(r.pageKey ?? '').trim()
+    if (pk === 'delivery') pk = 'assignment'
+    if (!(ALL_PAGE_KEYS as readonly string[]).includes(pk)) continue
+    const key = pk as PageKey
+    const cur: PageCrud = { view: r.view, edit: r.edit, delete: r.delete, create: r.create }
+    const prev = partial[key]
+    partial[key] = prev
+      ? {
+          view: prev.view || cur.view,
+          edit: prev.edit || cur.edit,
+          delete: prev.delete || cur.delete,
+          create: prev.create || cur.create,
+        }
+      : cur
+  }
+  return partial
+}

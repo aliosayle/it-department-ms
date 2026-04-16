@@ -1,6 +1,13 @@
 import type { RowDataPacket } from 'mysql2/promise'
 import { pool } from './db.js'
-import { type PageCrud, type PageKey, fullPermissions, mergePartial } from './pageKeys.js'
+import {
+  type PageCrud,
+  type PageKey,
+  denyAll,
+  fullPermissions,
+  mergePartial,
+  permissionRowsToPartial,
+} from './pageKeys.js'
 
 function isoDate(v: unknown): string {
   if (v == null) return ''
@@ -87,23 +94,37 @@ export async function loadBootstrapSnapshot(): Promise<BootstrapSnapshot> {
     'SELECT user_id AS userId, page_key AS pageKey, can_view AS cv, can_edit AS ce, can_delete AS cd, can_create AS cc FROM user_page_permissions',
   )
 
-  const permsByUser = new Map<string, Partial<Record<PageKey, PageCrud>>>()
+  const permListsByUser = new Map<
+    string,
+    Array<{ pageKey: string; view: boolean; edit: boolean; delete: boolean; create: boolean }>
+  >()
   for (const r of permRows) {
     const uid = String(r.userId)
-    const pk = String(r.pageKey) as PageKey
-    if (!permsByUser.has(uid)) permsByUser.set(uid, {})
-    permsByUser.get(uid)![pk] = {
+    if (!permListsByUser.has(uid)) permListsByUser.set(uid, [])
+    permListsByUser.get(uid)!.push({
+      pageKey: String(r.pageKey),
       view: Boolean(r.cv),
       edit: Boolean(r.ce),
       delete: Boolean(r.cd),
       create: Boolean(r.cc),
-    }
+    })
+  }
+
+  const permsByUser = new Map<string, Partial<Record<PageKey, PageCrud>>>()
+  for (const [uid, list] of permListsByUser) {
+    permsByUser.set(uid, permissionRowsToPartial(list))
   }
 
   const users = usersRows.map((u) => {
-    const partial = permsByUser.get(String(u.id))
-    const permissions =
-      !partial || Object.keys(partial).length === 0 ? fullPermissions() : mergePartial(partial)
+    const uid = String(u.id)
+    const list = permListsByUser.get(uid)
+    let permissions: Record<PageKey, PageCrud>
+    if (!list || list.length === 0) {
+      permissions = fullPermissions()
+    } else {
+      const partial = permissionRowsToPartial(list)
+      permissions = Object.keys(partial).length === 0 ? denyAll() : mergePartial(partial)
+    }
     return {
       id: u.id,
       displayName: u.displayName,
@@ -155,17 +176,17 @@ export async function getUserPermissions(userId: string): Promise<Record<PageKey
     'SELECT page_key AS pageKey, can_view AS cv, can_edit AS ce, can_delete AS cd, can_create AS cc FROM user_page_permissions WHERE user_id = :uid',
     { uid: userId },
   )
-  const partial: Partial<Record<PageKey, PageCrud>> = {}
-  for (const r of rows) {
-    const pk = String(r.pageKey) as PageKey
-    partial[pk] = {
+  if (rows.length === 0) return fullPermissions()
+  const partial = permissionRowsToPartial(
+    rows.map((r) => ({
+      pageKey: String(r.pageKey),
       view: Boolean(r.cv),
       edit: Boolean(r.ce),
       delete: Boolean(r.cd),
       create: Boolean(r.cc),
-    }
-  }
-  return Object.keys(partial).length === 0 ? fullPermissions() : mergePartial(partial)
+    })),
+  )
+  return Object.keys(partial).length === 0 ? denyAll() : mergePartial(partial)
 }
 
 export function assertPermission(

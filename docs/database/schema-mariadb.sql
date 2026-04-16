@@ -122,8 +122,8 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
   CONSTRAINT fk_inventory_movements_personnel FOREIGN KEY (personnel_id) REFERENCES personnel (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE INDEX idx_inventory_movements_product ON inventory_movements (product_id, occurred_at DESC);
-CREATE INDEX idx_inventory_movements_correlation ON inventory_movements (correlation_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_movements_product ON inventory_movements (product_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_inventory_movements_correlation ON inventory_movements (correlation_id);
 
 CREATE TABLE IF NOT EXISTS purchases (
   id VARCHAR(64) NOT NULL PRIMARY KEY,
@@ -228,6 +228,6 @@ CREATE TABLE IF NOT EXISTS audit_log (
   CONSTRAINT fk_audit_log_actor FOREIGN KEY (actor_user_id) REFERENCES portal_users (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE INDEX idx_audit_log_entity ON audit_log (entity_type, entity_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log (entity_type, entity_id, created_at DESC);
 
 SET FOREIGN_KEY_CHECKS = 1;

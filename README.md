@@ -9,7 +9,7 @@ Internal operations portal: **Vite**, **React**, **TypeScript**, and **DevExtrem
 - `npm run preview` — preview the production build
 - `npm run lint` — ESLint
 
-**Backend** (`backend/`): `npm run dev`, `npm run migrate`, `npm run seed` (requires `SEED_SUPERADMIN_PASSWORD`; creates one superadmin user only). **`scripts/setup-ubuntu.sh`** writes **`.credentials-portal.env`** with the first superadmin password when MariaDB is installed.
+**Backend** (`backend/`): `npm run dev`, `npm run migrate`, `npm run seed` (requires `SEED_SUPERADMIN_PASSWORD`; creates one superadmin user only). **`scripts/setup-ubuntu.sh`** writes **`.credentials-portal.env`** with the first superadmin password when MariaDB is installed. Run with **`VERBOSE=1`** for `set -x` and clearer step-by-step `[setup]` logs.
 
 ## DevExtreme licensing (evaluation vs production)
 

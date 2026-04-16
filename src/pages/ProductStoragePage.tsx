@@ -2,10 +2,11 @@ import { Link, useParams } from 'react-router-dom'
 import Button from 'devextreme-react/button'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
 import { storageUnitsForProductGridConfig } from '@/pages/gridPageConfigs.stockDomain'
-import { getProductById, getStorageUnitsForProduct } from '@/mocks/mockStore'
+import { getProductById, getStorageUnitsForProduct, useMockStore } from '@/mocks/mockStore'
 
 export function ProductStoragePage() {
   const { productId = '' } = useParams<{ productId: string }>()
+  useMockStore()
   const product = getProductById(productId)
   const rows = getStorageUnitsForProduct(productId)
 

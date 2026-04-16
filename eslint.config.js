@@ -20,4 +20,11 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: ['src/auth/AuthContext.tsx'],
+    rules: {
+      // Provider file also exports hooks for the same feature module.
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

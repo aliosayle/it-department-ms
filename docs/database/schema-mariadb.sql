@@ -1,23 +1,20 @@
--- IT Department portal — MariaDB / MySQL schema (aligned with docs/database/schema.sql)
--- Target: MariaDB 10.6+ (Ubuntu 22.04+) with utf8mb4. Applied by scripts/setup-ubuntu.sh.
+-- IT Department portal — MariaDB / MySQL schema (v1 canonical DDL)
+-- IDs are VARCHAR(64) to match seeded string keys (e.g. u-ali, co-xxx). No server-side UUID default on PKs.
+-- Target: MariaDB 10.6+ (Ubuntu 22.04+). Applied by scripts/setup-ubuntu.sh or backend migrations.
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
--- ---------------------------------------------------------------------------
--- Organization
--- ---------------------------------------------------------------------------
-
 CREATE TABLE IF NOT EXISTS companies (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
   name TEXT NOT NULL,
   notes TEXT NOT NULL DEFAULT '',
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS sites (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  company_id VARCHAR(36) NOT NULL,
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  company_id VARCHAR(64) NOT NULL,
   name TEXT NOT NULL,
   location TEXT NOT NULL DEFAULT '',
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -25,22 +22,23 @@ CREATE TABLE IF NOT EXISTS sites (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS personnel (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
   full_name TEXT NOT NULL,
   email TEXT NOT NULL,
-  company_id VARCHAR(36) NOT NULL,
-  site_id VARCHAR(36) NOT NULL,
+  company_id VARCHAR(64) NOT NULL,
+  site_id VARCHAR(64) NOT NULL,
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   CONSTRAINT fk_personnel_company FOREIGN KEY (company_id) REFERENCES companies (id) ON DELETE RESTRICT,
   CONSTRAINT fk_personnel_site FOREIGN KEY (site_id) REFERENCES sites (id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS portal_users (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
   display_name TEXT NOT NULL,
   login VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NULL,
   subject VARCHAR(255) NULL,
-  personnel_id VARCHAR(36) NULL,
+  personnel_id VARCHAR(64) NULL,
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   CONSTRAINT uq_portal_users_login UNIQUE (login),
   CONSTRAINT uq_portal_users_subject UNIQUE (subject),
@@ -48,7 +46,7 @@ CREATE TABLE IF NOT EXISTS portal_users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS user_page_permissions (
-  user_id VARCHAR(36) NOT NULL,
+  user_id VARCHAR(64) NOT NULL,
   page_key VARCHAR(64) NOT NULL,
   can_view TINYINT(1) NOT NULL DEFAULT 0,
   can_edit TINYINT(1) NOT NULL DEFAULT 0,
@@ -59,7 +57,7 @@ CREATE TABLE IF NOT EXISTS user_page_permissions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS suppliers (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
   name TEXT NOT NULL,
   contact_name TEXT NOT NULL DEFAULT '',
   email TEXT NOT NULL DEFAULT '',
@@ -70,7 +68,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS products (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
   sku VARCHAR(191) NOT NULL,
   name TEXT NOT NULL,
   brand TEXT NOT NULL DEFAULT '',
@@ -81,12 +79,12 @@ CREATE TABLE IF NOT EXISTS products (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS storage_units (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  site_id VARCHAR(36) NOT NULL,
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  site_id VARCHAR(64) NOT NULL,
   code VARCHAR(255) NOT NULL,
   label TEXT NOT NULL,
   kind VARCHAR(64) NOT NULL,
-  personnel_id VARCHAR(36) NULL,
+  personnel_id VARCHAR(64) NULL,
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   CONSTRAINT fk_storage_units_site FOREIGN KEY (site_id) REFERENCES sites (id) ON DELETE RESTRICT,
   CONSTRAINT fk_storage_units_personnel FOREIGN KEY (personnel_id) REFERENCES personnel (id),
@@ -94,9 +92,9 @@ CREATE TABLE IF NOT EXISTS storage_units (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS stock_positions (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  product_id VARCHAR(36) NOT NULL,
-  storage_unit_id VARCHAR(36) NOT NULL,
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  product_id VARCHAR(64) NOT NULL,
+  storage_unit_id VARCHAR(64) NOT NULL,
   quantity INT NOT NULL,
   status TEXT NOT NULL DEFAULT 'Available',
   CONSTRAINT fk_stock_positions_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE RESTRICT,
@@ -106,17 +104,17 @@ CREATE TABLE IF NOT EXISTS stock_positions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS inventory_movements (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  product_id VARCHAR(36) NOT NULL,
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  product_id VARCHAR(64) NOT NULL,
   occurred_at DATETIME(6) NOT NULL,
   delta INT NOT NULL,
   reason TEXT NOT NULL,
   note TEXT NOT NULL DEFAULT '',
-  ref_delivery_id VARCHAR(36) NULL,
-  ref_stock_position_id VARCHAR(36) NULL,
-  purchase_id VARCHAR(36) NULL,
-  personnel_id VARCHAR(36) NULL,
-  correlation_id VARCHAR(36) NULL,
+  ref_delivery_id VARCHAR(64) NULL,
+  ref_stock_position_id VARCHAR(64) NULL,
+  purchase_id VARCHAR(64) NULL,
+  personnel_id VARCHAR(64) NULL,
+  correlation_id VARCHAR(64) NULL,
   from_storage_label TEXT NULL,
   to_storage_label TEXT NULL,
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -128,13 +126,13 @@ CREATE INDEX idx_inventory_movements_product ON inventory_movements (product_id,
 CREATE INDEX idx_inventory_movements_correlation ON inventory_movements (correlation_id);
 
 CREATE TABLE IF NOT EXISTS purchases (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  company_id VARCHAR(36) NOT NULL,
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  company_id VARCHAR(64) NOT NULL,
   bon_number VARCHAR(512) NOT NULL,
   supplier_invoice_ref TEXT NOT NULL DEFAULT '',
-  supplier_id VARCHAR(36) NOT NULL,
-  issued_by_personnel_id VARCHAR(36) NOT NULL,
-  site_id VARCHAR(36) NOT NULL,
+  supplier_id VARCHAR(64) NOT NULL,
+  issued_by_personnel_id VARCHAR(64) NOT NULL,
+  site_id VARCHAR(64) NOT NULL,
   ordered_at DATE NOT NULL,
   expected_at DATE NULL,
   received_at DATE NULL,
@@ -149,12 +147,12 @@ CREATE TABLE IF NOT EXISTS purchases (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS purchase_lines (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  purchase_id VARCHAR(36) NOT NULL,
-  product_id VARCHAR(36) NOT NULL,
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  purchase_id VARCHAR(64) NOT NULL,
+  product_id VARCHAR(64) NOT NULL,
   quantity INT NOT NULL,
   unit_price DECIMAL(18, 4) NOT NULL,
-  storage_unit_id VARCHAR(36) NOT NULL,
+  storage_unit_id VARCHAR(64) NOT NULL,
   CONSTRAINT fk_purchase_lines_purchase FOREIGN KEY (purchase_id) REFERENCES purchases (id) ON DELETE CASCADE,
   CONSTRAINT fk_purchase_lines_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE RESTRICT,
   CONSTRAINT fk_purchase_lines_storage FOREIGN KEY (storage_unit_id) REFERENCES storage_units (id) ON DELETE RESTRICT,
@@ -163,9 +161,9 @@ CREATE TABLE IF NOT EXISTS purchase_lines (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS deliveries (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
   source ENUM('stock', 'external') NOT NULL,
-  stock_position_id VARCHAR(36) NULL,
+  stock_position_id VARCHAR(64) NULL,
   quantity INT NOT NULL,
   item_received_date DATE NULL,
   item_description TEXT NOT NULL DEFAULT '',
@@ -173,9 +171,9 @@ CREATE TABLE IF NOT EXISTS deliveries (
   site_label TEXT NOT NULL DEFAULT '',
   date_delivered DATE NOT NULL,
   description TEXT NOT NULL DEFAULT '',
-  company_id VARCHAR(36) NOT NULL,
-  site_id VARCHAR(36) NOT NULL,
-  personnel_id VARCHAR(36) NOT NULL,
+  company_id VARCHAR(64) NOT NULL,
+  site_id VARCHAR(64) NOT NULL,
+  personnel_id VARCHAR(64) NOT NULL,
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   CONSTRAINT fk_deliveries_stock_pos FOREIGN KEY (stock_position_id) REFERENCES stock_positions (id),
   CONSTRAINT fk_deliveries_company FOREIGN KEY (company_id) REFERENCES companies (id) ON DELETE RESTRICT,
@@ -185,7 +183,7 @@ CREATE TABLE IF NOT EXISTS deliveries (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS user_equipment (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
   name TEXT NOT NULL,
   department TEXT NOT NULL,
   form_factor TEXT NOT NULL,
@@ -199,7 +197,7 @@ CREATE TABLE IF NOT EXISTS user_equipment (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS network_devices (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
   type TEXT NOT NULL,
   details TEXT NOT NULL,
   brand TEXT NOT NULL,
@@ -209,8 +207,8 @@ CREATE TABLE IF NOT EXISTS network_devices (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS product_report_rows (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  product_id VARCHAR(36) NOT NULL,
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  product_id VARCHAR(64) NOT NULL,
   period TEXT NOT NULL,
   metric TEXT NOT NULL,
   value DECIMAL(18, 4) NOT NULL,
@@ -218,11 +216,11 @@ CREATE TABLE IF NOT EXISTS product_report_rows (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS audit_log (
-  id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
-  actor_user_id VARCHAR(36) NULL,
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  actor_user_id VARCHAR(64) NULL,
   action TEXT NOT NULL,
   entity_type VARCHAR(128) NOT NULL,
-  entity_id VARCHAR(36) NULL,
+  entity_id VARCHAR(64) NULL,
   before_json JSON NULL,
   after_json JSON NULL,
   ip VARCHAR(45) NULL,

@@ -1,0 +1,419 @@
+import type { Pool, RowDataPacket } from 'mysql2/promise'
+import { nextId } from './id.js'
+import { receiveStockInConn } from './inventoryWrites.js'
+
+function fmtLabel(code: string, label: string): string {
+  return `${code} (${label})`
+}
+
+export type CreateDeliveryBody = {
+  source: 'stock' | 'external'
+  stockPositionId: string | null
+  quantity: number
+  itemReceivedDate: string | null
+  itemDescription: string
+  deliveredTo: string
+  site: string
+  dateDelivered: string
+  description: string
+  companyId: string
+  siteId: string
+  personnelId: string
+}
+
+export async function createDeliveryTx(
+  pool: Pool,
+  input: CreateDeliveryBody,
+): Promise<{ ok: true; delivery: Record<string, unknown> } | { ok: false; error: string }> {
+  if (!input.companyId || !input.siteId || !input.personnelId) {
+    return { ok: false, error: 'Company, site, and recipient are required.' }
+  }
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[per]] = await conn.query<RowDataPacket[]>(
+      'SELECT id, company_id AS companyId, site_id AS siteId FROM personnel WHERE id = ? FOR UPDATE',
+      [input.personnelId],
+    )
+    if (!per) {
+      await conn.rollback()
+      return { ok: false, error: 'Personnel not found.' }
+    }
+    if (String(per.companyId) !== input.companyId) {
+      await conn.rollback()
+      return { ok: false, error: 'Personnel does not belong to the selected company.' }
+    }
+    const [[siteRow]] = await conn.query<RowDataPacket[]>('SELECT id, company_id AS companyId, name FROM sites WHERE id = ?', [
+      input.siteId,
+    ])
+    if (!siteRow || String(siteRow.companyId) !== input.companyId) {
+      await conn.rollback()
+      return { ok: false, error: 'Site does not belong to the selected company.' }
+    }
+    if (String(per.siteId) !== input.siteId) {
+      await conn.rollback()
+      return { ok: false, error: 'Recipient is not assigned to the selected site.' }
+    }
+
+    const qtyAll = Math.floor(Number(input.quantity))
+    if (input.source === 'external' && qtyAll < 1) {
+      await conn.rollback()
+      return { ok: false, error: 'Quantity must be at least 1.' }
+    }
+
+    if (input.source === 'stock') {
+      if (!input.stockPositionId) {
+        await conn.rollback()
+        return { ok: false, error: 'Select a stock position.' }
+      }
+      const q = Math.floor(Number(input.quantity))
+      if (q < 1) {
+        await conn.rollback()
+        return { ok: false, error: 'Quantity must be at least 1.' }
+      }
+      const [[pos]] = await conn.query<RowDataPacket[]>(
+        'SELECT id, product_id AS productId, storage_unit_id AS storageUnitId, quantity FROM stock_positions WHERE id = ? FOR UPDATE',
+        [input.stockPositionId],
+      )
+      if (!pos) {
+        await conn.rollback()
+        return { ok: false, error: 'Stock position not found.' }
+      }
+      if (q > Number(pos.quantity)) {
+        await conn.rollback()
+        return { ok: false, error: `Insufficient quantity (available: ${pos.quantity}).` }
+      }
+      const [custodyRows] = await conn.query<RowDataPacket[]>(
+        'SELECT id, code, label FROM storage_units WHERE personnel_id = ? AND kind = ? LIMIT 1',
+        [input.personnelId, 'custody'],
+      )
+      if (!custodyRows.length) {
+        await conn.rollback()
+        return {
+          ok: false,
+          error: 'Recipient has no custody storage unit. Add a custody bin for this person in storage units.',
+        }
+      }
+    }
+
+    const [[pname]] = await conn.query<RowDataPacket[]>('SELECT full_name AS fullName FROM personnel WHERE id = ?', [
+      input.personnelId,
+    ])
+    const deliveredTo = (input.deliveredTo || '').trim() || String(pname?.fullName ?? '')
+    const siteLabel = (input.site || '').trim() || String(siteRow.name ?? '')
+
+    const deliveryId = nextId('del')
+    const stockPid = input.source === 'stock' ? input.stockPositionId : null
+    const qty = Math.floor(Number(input.quantity))
+    const itemReceivedDate = input.source === 'stock' ? null : input.itemReceivedDate
+
+    await conn.query(
+      `INSERT INTO deliveries (id, source, stock_position_id, quantity, item_received_date, item_description, delivered_to, site_label, date_delivered, description, company_id, site_id, personnel_id)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        deliveryId,
+        input.source,
+        stockPid,
+        qty,
+        itemReceivedDate,
+        input.itemDescription,
+        deliveredTo,
+        siteLabel,
+        input.dateDelivered.slice(0, 10),
+        input.description,
+        input.companyId,
+        input.siteId,
+        input.personnelId,
+      ],
+    )
+
+    if (input.source === 'stock' && input.stockPositionId) {
+      const [[pos]] = await conn.query<RowDataPacket[]>(
+        'SELECT id, product_id AS productId, storage_unit_id AS storageUnitId, quantity FROM stock_positions WHERE id = ? FOR UPDATE',
+        [input.stockPositionId],
+      )
+      if (!pos) {
+        await conn.rollback()
+        return { ok: false, error: 'Stock position not found.' }
+      }
+      const q = qty
+      const [[custodySu]] = await conn.query<RowDataPacket[]>(
+        'SELECT id, code, label FROM storage_units WHERE personnel_id = ? AND kind = ? LIMIT 1 FOR UPDATE',
+        [input.personnelId, 'custody'],
+      )
+      if (!custodySu) {
+        await conn.rollback()
+        return { ok: false, error: 'Custody storage missing.' }
+      }
+      const productId = String(pos.productId)
+      const [[fromSu]] = await conn.query<RowDataPacket[]>('SELECT code, label FROM storage_units WHERE id = ?', [
+        pos.storageUnitId,
+      ])
+      const fromLabel = fromSu ? fmtLabel(String(fromSu.code), String(fromSu.label)) : '—'
+      const custodyLabel = fmtLabel(String(custodySu.code), String(custodySu.label))
+      const recipientName = String(pname?.fullName ?? 'recipient')
+
+      await conn.query('UPDATE stock_positions SET quantity = quantity - ? WHERE id = ?', [q, input.stockPositionId])
+      await conn.query('DELETE FROM stock_positions WHERE id = ? AND quantity <= 0', [input.stockPositionId])
+
+      const [custodyPos] = await conn.query<RowDataPacket[]>(
+        'SELECT id FROM stock_positions WHERE product_id = ? AND storage_unit_id = ? FOR UPDATE',
+        [productId, custodySu.id],
+      )
+      let custodyPositionId: string
+      if (custodyPos.length) {
+        custodyPositionId = String(custodyPos[0].id)
+        await conn.query('UPDATE stock_positions SET quantity = quantity + ?, status = ? WHERE id = ?', [
+          q,
+          'Issued',
+          custodyPositionId,
+        ])
+      } else {
+        custodyPositionId = nextId('pos')
+        await conn.query(
+          'INSERT INTO stock_positions (id, product_id, storage_unit_id, quantity, status) VALUES (?,?,?,?,?)',
+          [custodyPositionId, productId, custodySu.id, q, 'Issued'],
+        )
+      }
+
+      const noteIn = input.description || `Issued to ${recipientName}`
+      const noteOut = input.description || 'Outbound delivery'
+      const inMov = nextId('mov')
+      const outMov = nextId('mov')
+      await conn.query(
+        `INSERT INTO inventory_movements (id, product_id, occurred_at, delta, reason, note, ref_delivery_id, ref_stock_position_id, purchase_id, personnel_id, correlation_id, from_storage_label, to_storage_label)
+         VALUES (?,?,DATE_ADD(NOW(6), INTERVAL 1 MICROSECOND),?,?,?,?,?,?,?,?,?,?)`,
+        [inMov, productId, q, 'custody_in', noteIn, deliveryId, custodyPositionId, null, input.personnelId, null, fromLabel, custodyLabel],
+      )
+      await conn.query(
+        `INSERT INTO inventory_movements (id, product_id, occurred_at, delta, reason, note, ref_delivery_id, ref_stock_position_id, purchase_id, personnel_id, correlation_id, from_storage_label, to_storage_label)
+         VALUES (?,?,NOW(6),?,?,?,?,?,?,?,?,?,?)`,
+        [
+          outMov,
+          productId,
+          -q,
+          'delivery_out',
+          noteOut,
+          deliveryId,
+          input.stockPositionId,
+          null,
+          input.personnelId,
+          null,
+          fromLabel,
+          custodyLabel,
+        ],
+      )
+    }
+
+    await conn.commit()
+
+    const delivery = {
+      id: deliveryId,
+      source: input.source,
+      stockPositionId: stockPid,
+      quantity: qty,
+      itemReceivedDate,
+      itemDescription: input.itemDescription,
+      deliveredTo,
+      site: siteLabel,
+      dateDelivered: input.dateDelivered.slice(0, 10),
+      description: input.description,
+      companyId: input.companyId,
+      siteId: input.siteId,
+      personnelId: input.personnelId,
+    }
+    return { ok: true, delivery }
+  } catch (e) {
+    await conn.rollback()
+    return { ok: false, error: e instanceof Error ? e.message : 'Transaction failed' }
+  } finally {
+    conn.release()
+  }
+}
+
+export type CreatePurchaseLine = {
+  productId: string
+  quantity: number
+  unitPrice: number
+  storageUnitId: string
+}
+
+export type CreatePurchaseBody = {
+  bonNumber: string
+  supplierInvoiceRef: string
+  supplierId: string
+  issuedByPersonnelId: string
+  siteId: string
+  orderedAt: string
+  expectedAt: string | null
+  notes: string
+  lines: CreatePurchaseLine[]
+}
+
+export async function createPurchaseTx(
+  pool: Pool,
+  input: CreatePurchaseBody,
+): Promise<{ ok: true; purchase: Record<string, unknown> } | { ok: false; error: string }> {
+  const bon = (input.bonNumber || '').trim()
+  if (!bon) return { ok: false, error: 'Bon number is required.' }
+  if (!input.lines?.length) return { ok: false, error: 'Add at least one line (product, quantity, storage).' }
+
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[site]] = await conn.query<RowDataPacket[]>('SELECT id, company_id AS companyId FROM sites WHERE id = ?', [
+      input.siteId,
+    ])
+    if (!site) {
+      await conn.rollback()
+      return { ok: false, error: 'Site not found.' }
+    }
+    const companyId = String(site.companyId)
+    const [[dup]] = await conn.query<RowDataPacket[]>(
+      'SELECT id FROM purchases WHERE company_id = ? AND LOWER(bon_number) = LOWER(?)',
+      [companyId, bon],
+    )
+    if (dup) {
+      await conn.rollback()
+      return { ok: false, error: 'A purchase with this bon number already exists.' }
+    }
+    const [[sup]] = await conn.query<RowDataPacket[]>('SELECT id FROM suppliers WHERE id = ?', [input.supplierId])
+    if (!sup) {
+      await conn.rollback()
+      return { ok: false, error: 'Supplier not found.' }
+    }
+    const [[issuer]] = await conn.query<RowDataPacket[]>('SELECT id FROM personnel WHERE id = ?', [
+      input.issuedByPersonnelId,
+    ])
+    if (!issuer) {
+      await conn.rollback()
+      return { ok: false, error: 'Issued-by (personnel) not found.' }
+    }
+    for (const line of input.lines) {
+      if (Math.floor(line.quantity) < 1) {
+        await conn.rollback()
+        return { ok: false, error: 'Each line needs quantity at least 1.' }
+      }
+      const [[pr]] = await conn.query<RowDataPacket[]>('SELECT id FROM products WHERE id = ?', [line.productId])
+      if (!pr) {
+        await conn.rollback()
+        return { ok: false, error: 'Product not found on a line.' }
+      }
+      const [[su]] = await conn.query<RowDataPacket[]>('SELECT id FROM storage_units WHERE id = ?', [line.storageUnitId])
+      if (!su) {
+        await conn.rollback()
+        return { ok: false, error: 'Storage unit not found on a line.' }
+      }
+    }
+
+    const purchaseId = nextId('pur')
+    const orderedAt = input.orderedAt.slice(0, 10)
+    const expectedAt = input.expectedAt ? input.expectedAt.slice(0, 10) : null
+    await conn.query(
+      `INSERT INTO purchases (id, company_id, bon_number, supplier_invoice_ref, supplier_id, issued_by_personnel_id, site_id, ordered_at, expected_at, received_at, status, notes)
+       VALUES (?,?,?,?,?,?,?,?,?,NULL,'ordered',?)`,
+      [
+        purchaseId,
+        companyId,
+        bon,
+        (input.supplierInvoiceRef || '').trim(),
+        input.supplierId,
+        input.issuedByPersonnelId,
+        input.siteId,
+        orderedAt,
+        expectedAt,
+        (input.notes || '').trim(),
+      ],
+    )
+    for (const line of input.lines) {
+      const lid = nextId('pl')
+      await conn.query(
+        'INSERT INTO purchase_lines (id, purchase_id, product_id, quantity, unit_price, storage_unit_id) VALUES (?,?,?,?,?,?)',
+        [lid, purchaseId, line.productId, Math.floor(line.quantity), line.unitPrice, line.storageUnitId],
+      )
+    }
+    await conn.commit()
+
+    const purchase = {
+      id: purchaseId,
+      bonNumber: bon,
+      supplierInvoiceRef: (input.supplierInvoiceRef || '').trim(),
+      supplierId: input.supplierId,
+      issuedByPersonnelId: input.issuedByPersonnelId,
+      siteId: input.siteId,
+      orderedAt,
+      expectedAt,
+      receivedAt: null,
+      status: 'ordered',
+      notes: (input.notes || '').trim(),
+    }
+    return { ok: true, purchase }
+  } catch (e) {
+    await conn.rollback()
+    return { ok: false, error: e instanceof Error ? e.message : 'Transaction failed' }
+  } finally {
+    conn.release()
+  }
+}
+
+export async function receivePurchaseTx(pool: Pool, purchaseId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[purchase]] = await conn.query<RowDataPacket[]>(
+      'SELECT id, bon_number AS bonNumber, supplier_invoice_ref AS supplierInvoiceRef, status FROM purchases WHERE id = ? FOR UPDATE',
+      [purchaseId],
+    )
+    if (!purchase) {
+      await conn.rollback()
+      return { ok: false, error: 'Purchase not found.' }
+    }
+    if (String(purchase.status) === 'received') {
+      await conn.rollback()
+      return { ok: false, error: 'This purchase is already received into stock.' }
+    }
+    if (String(purchase.status) === 'cancelled') {
+      await conn.rollback()
+      return { ok: false, error: 'Cancelled purchase cannot be received.' }
+    }
+    const [lines] = await conn.query<RowDataPacket[]>(
+      'SELECT product_id AS productId, quantity, storage_unit_id AS storageUnitId FROM purchase_lines WHERE purchase_id = ?',
+      [purchaseId],
+    )
+    if (!lines.length) {
+      await conn.rollback()
+      return { ok: false, error: 'No lines on this purchase.' }
+    }
+
+    const bon = String(purchase.bonNumber ?? '')
+    const inv = String(purchase.supplierInvoiceRef ?? '').trim()
+    for (const line of lines) {
+      const note = `Bon ${bon}${inv ? ` · Inv ${inv}` : ''} · Purchase ${purchaseId}`
+      const r = await receiveStockInConn(conn, {
+        productId: String(line.productId),
+        storageUnitId: String(line.storageUnitId),
+        quantity: Number(line.quantity),
+        status: 'Available',
+        reason: 'Purchase',
+        note,
+        purchaseId,
+      })
+      if (!r.ok) {
+        await conn.rollback()
+        return r
+      }
+    }
+
+    await conn.query(
+      "UPDATE purchases SET status = 'received', received_at = CURDATE() WHERE id = ?",
+      [purchaseId],
+    )
+    await conn.commit()
+    return { ok: true }
+  } catch (e) {
+    await conn.rollback()
+    return { ok: false, error: e instanceof Error ? e.message : 'Transaction failed' }
+  } finally {
+    conn.release()
+  }
+}

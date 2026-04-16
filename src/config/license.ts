@@ -1,5 +1,7 @@
-/** DevExtreme evaluation key — replace with commercial config before production. */
-export const DEVEXTREME_LICENSE_KEY = 'non-commercial-and-evaluation' as const
+const fromEnv = import.meta.env.VITE_DEVEXTREME_LICENSE_KEY?.trim()
+
+/** DevExtreme license: commercial key from env, otherwise evaluation key (see README). */
+export const DEVEXTREME_LICENSE_KEY = (fromEnv && fromEnv.length > 0 ? fromEnv : 'non-commercial-and-evaluation') as string
 
 /**
  * When false, skip eval watermark CSS/JS (use after configuring a commercial license key).

@@ -2,10 +2,11 @@ import { Link, useParams } from 'react-router-dom'
 import Button from 'devextreme-react/button'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
 import { productReportGridConfig } from '@/pages/gridPageConfigs.stockDomain'
-import { getProductById, getReportsForProduct } from '@/mocks/mockStore'
+import { getProductById, getReportsForProduct, useMockStore } from '@/mocks/mockStore'
 
 export function ProductReportsPage() {
   const { productId = '' } = useParams<{ productId: string }>()
+  useMockStore()
   const product = getProductById(productId)
   const rows = getReportsForProduct(productId)
 

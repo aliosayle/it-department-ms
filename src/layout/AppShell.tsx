@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import SelectBox from 'devextreme-react/select-box'
 import { NavIcon, type NavIconId } from '@/components/NavIcon'
 import { ApiForbiddenBridge } from '@/api/ApiForbiddenBridge'
+import { isLiveApi } from '@/api/config'
 import { useAuth } from '@/auth/AuthContext'
 import type { PageKey } from '@/mocks/domain/types'
 import { getPageMeta } from '@/layout/pageMeta'
@@ -68,7 +69,8 @@ const navItems: NavItem[] = [
 export function AppShell() {
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
-  const { userId, setUserId, users, can } = useAuth()
+  const { userId, setUserId, users, can, user, logout } = useAuth()
+  const live = isLiveApi()
 
   const meta = getPageMeta(location.pathname)
 
@@ -133,19 +135,31 @@ export function AppShell() {
                   Development
                 </span>
               ) : null}
-              <SelectBox
-                className="app-shell__user-select"
-                dataSource={userOptions}
-                displayExpr="text"
-                valueExpr="value"
-                value={userId}
-                width={280}
-                showClearButton={false}
-                label="Signed-in profile"
-                labelMode="outside"
-                onValueChanged={(e) => setUserId(String(e.value))}
-                aria-label="Select signed-in user profile"
-              />
+              {live ? (
+                <div className="app-shell__user-live" style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+                  <span className="form-page__hint" style={{ margin: 0, maxWidth: 280 }}>
+                    <strong>{user.displayName}</strong>
+                    <span style={{ opacity: 0.75 }}> · {user.login}</span>
+                  </span>
+                  <button type="button" className="app-shell__logout" onClick={logout}>
+                    Sign out
+                  </button>
+                </div>
+              ) : (
+                <SelectBox
+                  className="app-shell__user-select"
+                  dataSource={userOptions}
+                  displayExpr="text"
+                  valueExpr="value"
+                  value={userId}
+                  width={280}
+                  showClearButton={false}
+                  label="Signed-in profile"
+                  labelMode="outside"
+                  onValueChanged={(e) => setUserId(String(e.value))}
+                  aria-label="Select signed-in user profile"
+                />
+              )}
             </div>
           </div>
         </header>

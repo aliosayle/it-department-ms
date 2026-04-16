@@ -1,5 +1,7 @@
 import { Route, Routes } from 'react-router-dom'
 import { PageGuard } from '@/auth/PageGuard'
+import { RequireAuth } from '@/auth/RequireAuth'
+import { WaitForSession } from '@/auth/WaitForSession'
 import { AppShell } from '@/layout/AppShell'
 import { AssetsPage } from '@/pages/AssetsPage'
 import { CompaniesListPage } from '@/pages/CompaniesListPage'
@@ -37,11 +39,15 @@ import { UserEquipmentDetailPage } from '@/pages/UserEquipmentDetailPage'
 import { UserEquipmentListPage } from '@/pages/UserEquipmentListPage'
 import { UserPermissionsPage } from '@/pages/UserPermissionsPage'
 import { UsersListPage } from '@/pages/UsersListPage'
+import { LoginPage } from '@/pages/LoginPage'
 
 export function AppRoutes() {
   return (
     <Routes>
-      <Route element={<AppShell />}>
+      <Route path="/login" element={<LoginPage />} />
+      <Route element={<RequireAuth />}>
+        <Route element={<WaitForSession />}>
+          <Route element={<AppShell />}>
         <Route
           index
           element={
@@ -275,6 +281,8 @@ export function AppRoutes() {
         />
         <Route path="access-denied" element={<AccessDeniedPage />} />
         <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        </Route>
       </Route>
     </Routes>
   )

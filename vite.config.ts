@@ -11,6 +11,10 @@ export default defineConfig({
   // Listen on all addresses (e.g. 0.0.0.0) so other machines on the LAN can open the dev URL.
   server: {
     host: true,
+    proxy: {
+      // When `VITE_API_BASE_URL=/api/v1`, dev requests hit the local API on port 4000.
+      '/api': { target: 'http://127.0.0.1:4000', changeOrigin: true },
+    },
   },
   resolve: {
     alias: {

@@ -5,7 +5,7 @@ import CheckBox from 'devextreme-react/check-box'
 import { ALL_PAGE_KEYS } from '@/auth/pageKeys'
 import { useCan } from '@/auth/AuthContext'
 import { portalUpdatePortalUser } from '@/api/mutations'
-import { getPortalUserById, useMockStore } from '@/mocks/mockStore'
+import { useMockStore } from '@/mocks/mockStore'
 import type { PageCrud, PageKey } from '@/mocks/domain/types'
 import './formPage.css'
 
@@ -19,16 +19,20 @@ function clonePerms(p: Record<PageKey, PageCrud>): Record<PageKey, PageCrud> {
 
 export function UserPermissionsPage() {
   const { userId = '' } = useParams<{ userId: string }>()
-  useMockStore()
+  const snap = useMockStore()
   const navigate = useNavigate()
   const usersPerm = useCan('users')
-  const target = getPortalUserById(userId)
+  const target = useMemo(() => snap.users.find((u) => u.id === userId), [snap.users, userId])
   const [perms, setPerms] = useState<Record<PageKey, PageCrud> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    if (target) setPerms(clonePerms(target.permissions))
+    if (!target) return
+    queueMicrotask(() => {
+      setPerms(clonePerms(target.permissions))
+      setSaved(false)
+    })
   }, [target])
 
   const actions: (keyof PageCrud)[] = useMemo(() => ['view', 'edit', 'delete', 'create'], [])

@@ -1,4 +1,3 @@
-import { useSyncExternalStore } from 'react'
 import companiesSeed from '@/mocks/companies.seed.json'
 import deliveriesSeed from '@/mocks/deliveries.seed.json'
 import networkDevicesSeed from '@/mocks/networkDevices.seed.json'
@@ -45,7 +44,7 @@ import type {
   UserEquipment,
 } from '@/mocks/domain/types'
 
-type StoreState = {
+export type StoreState = {
   companies: Company[]
   sites: Site[]
   personnel: Personnel[]
@@ -111,7 +110,19 @@ function cloneSeeds(): StoreState {
   }
 }
 
-let state: StoreState = cloneSeeds()
+let memState: StoreState = cloneSeeds()
+/** When API mode loads bootstrap JSON, reads use this snapshot until the next refetch. */
+let liveSnapshot: StoreState | null = null
+
+export function setLiveSnapshot(s: StoreState | null) {
+  liveSnapshot = s
+  emit()
+}
+
+function active(): StoreState {
+  return liveSnapshot ?? memState
+}
+
 const listeners = new Set<() => void>()
 
 function emit() {
@@ -119,7 +130,7 @@ function emit() {
 }
 
 function setState(updater: (s: StoreState) => void) {
-  updater(state)
+  updater(memState)
   emit()
 }
 
@@ -129,7 +140,7 @@ export function subscribeMockStore(cb: () => void) {
 }
 
 export function getMockStoreSnapshot(): StoreState {
-  return state
+  return active()
 }
 
 let idCounter = 1
@@ -138,7 +149,7 @@ function nextId(prefix: string) {
 }
 
 function siteBelongsToCompany(siteId: string, companyId: string): boolean {
-  const site = state.sites.find((s) => s.id === siteId)
+  const site = active().sites.find((s) => s.id === siteId)
   return site?.companyId === companyId
 }
 
@@ -151,7 +162,7 @@ export function addCompany(name: string, notes = ''): Company {
 }
 
 export function addSite(companyId: string, name: string, location: string): { ok: true; site: Site } | { ok: false; error: string } {
-  if (!state.companies.some((c) => c.id === companyId)) {
+  if (!active().companies.some((c) => c.id === companyId)) {
     return { ok: false, error: 'Company not found.' }
   }
   const site: Site = {
@@ -172,10 +183,10 @@ export function addPersonnel(
   companyId: string,
   siteId: string,
 ): { ok: true; personnel: Personnel } | { ok: false; error: string } {
-  if (!state.companies.some((c) => c.id === companyId)) {
+  if (!active().companies.some((c) => c.id === companyId)) {
     return { ok: false, error: 'Company not found.' }
   }
-  const site = state.sites.find((x) => x.id === siteId)
+  const site = active().sites.find((x) => x.id === siteId)
   if (!site) return { ok: false, error: 'Site not found.' }
   if (site.companyId !== companyId) {
     return { ok: false, error: 'Site does not belong to the selected company.' }
@@ -194,8 +205,8 @@ export function addPersonnel(
 }
 
 function resolveDeliveryLabels(personnelId: string, siteId: string): { deliveredTo: string; site: string } {
-  const per = state.personnel.find((p) => p.id === personnelId)
-  const site = state.sites.find((x) => x.id === siteId)
+  const per = active().personnel.find((p) => p.id === personnelId)
+  const site = active().sites.find((x) => x.id === siteId)
   return {
     deliveredTo: per ? `${per.fullName}${per.email ? ` <${per.email}>` : ''}` : '',
     site: site ? `${site.name} — ${site.location}` : '',
@@ -205,8 +216,8 @@ function resolveDeliveryLabels(personnelId: string, siteId: string): { delivered
 export function receiveStock(input: ReceiveStockInput): { ok: true } | { ok: false; error: string } {
   const q = Math.floor(input.quantity)
   if (q < 1) return { ok: false, error: 'Quantity must be at least 1.' }
-  if (!state.products.some((p) => p.id === input.productId)) return { ok: false, error: 'Product not found.' }
-  if (!state.storageUnits.some((u) => u.id === input.storageUnitId)) {
+  if (!active().products.some((p) => p.id === input.productId)) return { ok: false, error: 'Product not found.' }
+  if (!active().storageUnits.some((u) => u.id === input.storageUnitId)) {
     return { ok: false, error: 'Storage unit not found.' }
   }
 
@@ -267,7 +278,7 @@ export function createDelivery(input: CreateDeliveryInput): CreateDeliveryResult
   if (!input.companyId || !input.siteId || !input.personnelId) {
     return { ok: false, error: 'Company, site, and recipient are required.' }
   }
-  const per = state.personnel.find((p) => p.id === input.personnelId)
+  const per = active().personnel.find((p) => p.id === input.personnelId)
   if (!per) return { ok: false, error: 'Personnel not found.' }
   if (per.companyId !== input.companyId) return { ok: false, error: 'Personnel does not belong to the selected company.' }
   if (!siteBelongsToCompany(input.siteId, input.companyId)) {
@@ -281,16 +292,16 @@ export function createDelivery(input: CreateDeliveryInput): CreateDeliveryResult
     if (!input.stockPositionId) {
       return { ok: false, error: 'Select a stock position.' }
     }
-    const idx = state.stockPositions.findIndex((x) => x.id === input.stockPositionId)
+    const idx = active().stockPositions.findIndex((x) => x.id === input.stockPositionId)
     if (idx < 0) return { ok: false, error: 'Stock position not found.' }
     if (input.quantity < 1) return { ok: false, error: 'Quantity must be at least 1.' }
-    if (input.quantity > state.stockPositions[idx].quantity) {
+    if (input.quantity > active().stockPositions[idx].quantity) {
       return {
         ok: false,
-        error: `Insufficient quantity (available: ${state.stockPositions[idx].quantity}).`,
+        error: `Insufficient quantity (available: ${active().stockPositions[idx].quantity}).`,
       }
     }
-    const custodySu = state.storageUnits.find(
+    const custodySu = active().storageUnits.find(
       (u) => u.personnelId === input.personnelId && u.kind === 'custody',
     )
     if (!custodySu) {
@@ -409,17 +420,17 @@ export type TransferStockResult = { ok: true } | { ok: false; error: string }
 export function transferStock(input: TransferStockInput): TransferStockResult {
   const q = Math.floor(input.quantity)
   if (q < 1) return { ok: false, error: 'Quantity must be at least 1.' }
-  const fromPos = state.stockPositions.find((p) => p.id === input.fromStockPositionId)
+  const fromPos = active().stockPositions.find((p) => p.id === input.fromStockPositionId)
   if (!fromPos) return { ok: false, error: 'Source stock position not found.' }
   if (q > fromPos.quantity) {
     return { ok: false, error: `Insufficient quantity (available: ${fromPos.quantity}).` }
   }
-  const destSu = state.storageUnits.find((u) => u.id === input.toStorageUnitId)
+  const destSu = active().storageUnits.find((u) => u.id === input.toStorageUnitId)
   if (!destSu) return { ok: false, error: 'Destination storage unit not found.' }
   if (fromPos.storageUnitId === input.toStorageUnitId) {
     return { ok: false, error: 'Source and destination storage are the same.' }
   }
-  const fromSu = state.storageUnits.find((u) => u.id === fromPos.storageUnitId)
+  const fromSu = active().storageUnits.find((u) => u.id === fromPos.storageUnitId)
   const fromLabel = formatStorageUnitLabel(fromSu)
   const toLabel = formatStorageUnitLabel(destSu)
   const productId = fromPos.productId
@@ -497,11 +508,11 @@ export function transferStock(input: TransferStockInput): TransferStockResult {
 }
 
 export function buildStockOverview(): StockOverviewRow[] {
-  return state.stockPositions.filter((pos) => pos.quantity > 0).map((pos) => {
-    const product = state.products.find((p) => p.id === pos.productId)
-    const su = state.storageUnits.find((u) => u.id === pos.storageUnitId)
-    const site = su ? state.sites.find((x) => x.id === su.siteId) : undefined
-    const company = site ? state.companies.find((c) => c.id === site.companyId) : undefined
+  return active().stockPositions.filter((pos) => pos.quantity > 0).map((pos) => {
+    const product = active().products.find((p) => p.id === pos.productId)
+    const su = active().storageUnits.find((u) => u.id === pos.storageUnitId)
+    const site = su ? active().sites.find((x) => x.id === su.siteId) : undefined
+    const company = site ? active().companies.find((c) => c.id === site.companyId) : undefined
     return {
       id: pos.id,
       productSku: product?.sku ?? pos.productId,
@@ -517,13 +528,13 @@ export function buildStockOverview(): StockOverviewRow[] {
 
 export function buildStockOverviewByProduct(): StockProductSummaryRow[] {
   const byProduct = new Map<string, number>()
-  for (const pos of state.stockPositions) {
+  for (const pos of active().stockPositions) {
     if (pos.quantity <= 0) continue
     byProduct.set(pos.productId, (byProduct.get(pos.productId) ?? 0) + pos.quantity)
   }
   const rows: StockProductSummaryRow[] = []
   for (const [productId, totalQuantity] of byProduct) {
-    const product = state.products.find((p) => p.id === productId)
+    const product = active().products.find((p) => p.id === productId)
     rows.push({
       id: productId,
       productId,
@@ -536,13 +547,13 @@ export function buildStockOverviewByProduct(): StockProductSummaryRow[] {
 }
 
 export function buildStockPositionsForStorageUnit(storageUnitId: string): StorageUnitStockRow[] {
-  return state.stockPositions
+  return active().stockPositions
     .filter((pos) => pos.storageUnitId === storageUnitId && pos.quantity > 0)
     .map((pos) => {
-      const product = state.products.find((p) => p.id === pos.productId)
-      const su = state.storageUnits.find((u) => u.id === pos.storageUnitId)
-      const site = su ? state.sites.find((x) => x.id === su.siteId) : undefined
-      const company = site ? state.companies.find((c) => c.id === site.companyId) : undefined
+      const product = active().products.find((p) => p.id === pos.productId)
+      const su = active().storageUnits.find((u) => u.id === pos.storageUnitId)
+      const site = su ? active().sites.find((x) => x.id === su.siteId) : undefined
+      const company = site ? active().companies.find((c) => c.id === site.companyId) : undefined
       return {
         id: pos.id,
         productSku: product?.sku ?? pos.productId,
@@ -563,11 +574,11 @@ export type StorageUnitListRow = StorageUnit & {
 }
 
 export function buildStorageUnitListRows(): StorageUnitListRow[] {
-  return state.storageUnits.map((u) => {
-    const site = state.sites.find((s) => s.id === u.siteId)
-    const company = site ? state.companies.find((c) => c.id === site.companyId) : undefined
+  return active().storageUnits.map((u) => {
+    const site = active().sites.find((s) => s.id === u.siteId)
+    const company = site ? active().companies.find((c) => c.id === site.companyId) : undefined
     const holder = u.personnelId
-      ? state.personnel.find((p) => p.id === u.personnelId)?.fullName
+      ? active().personnel.find((p) => p.id === u.personnelId)?.fullName
       : undefined
     return {
       ...u,
@@ -579,11 +590,11 @@ export function buildStorageUnitListRows(): StorageUnitListRow[] {
 }
 
 export function getStorageUnitById(id: string): StorageUnit | undefined {
-  return state.storageUnits.find((u) => u.id === id)
+  return active().storageUnits.find((u) => u.id === id)
 }
 
 export function buildMovementStatementRows(productId: string): MovementStatementRow[] {
-  return state.productMovements
+  return active().productMovements
     .filter((m) => m.productId === productId)
     .slice()
     .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
@@ -626,20 +637,20 @@ export function addSupplier(
 }
 
 export function getSupplierById(id: string): Supplier | undefined {
-  return state.suppliers.find((x) => x.id === id)
+  return active().suppliers.find((x) => x.id === id)
 }
 
 export function getPurchaseById(id: string): Purchase | undefined {
-  return state.purchases.find((x) => x.id === id)
+  return active().purchases.find((x) => x.id === id)
 }
 
 export function buildPurchaseListRows(): PurchaseListRow[] {
-  return state.purchases.map((p) => {
-    const sup = state.suppliers.find((s) => s.id === p.supplierId)
-    const per = state.personnel.find((x) => x.id === p.issuedByPersonnelId)
-    const site = state.sites.find((s) => s.id === p.siteId)
-    const company = site ? state.companies.find((c) => c.id === site.companyId) : undefined
-    const lineCount = state.purchaseLines.filter((l) => l.purchaseId === p.id).length
+  return active().purchases.map((p) => {
+    const sup = active().suppliers.find((s) => s.id === p.supplierId)
+    const per = active().personnel.find((x) => x.id === p.issuedByPersonnelId)
+    const site = active().sites.find((s) => s.id === p.siteId)
+    const company = site ? active().companies.find((c) => c.id === site.companyId) : undefined
+    const lineCount = active().purchaseLines.filter((l) => l.purchaseId === p.id).length
     return {
       ...p,
       supplierName: sup?.name ?? '—',
@@ -653,18 +664,18 @@ export function buildPurchaseListRows(): PurchaseListRow[] {
 
 export function buildPurchasesForProduct(productId: string): PurchaseListRow[] {
   const purchaseIds = new Set(
-    state.purchaseLines.filter((l) => l.productId === productId).map((l) => l.purchaseId),
+    active().purchaseLines.filter((l) => l.productId === productId).map((l) => l.purchaseId),
   )
   return buildPurchaseListRows().filter((r) => purchaseIds.has(r.id))
 }
 
 export function buildPurchaseLineDetailRows(purchaseId: string): PurchaseLineDetailRow[] {
-  return state.purchaseLines
+  return active().purchaseLines
     .filter((l) => l.purchaseId === purchaseId)
     .map((line) => {
-      const pr = state.products.find((p) => p.id === line.productId)
-      const su = state.storageUnits.find((u) => u.id === line.storageUnitId)
-      const site = su ? state.sites.find((s) => s.id === su.siteId) : undefined
+      const pr = active().products.find((p) => p.id === line.productId)
+      const su = active().storageUnits.find((u) => u.id === line.storageUnitId)
+      const site = su ? active().sites.find((s) => s.id === su.siteId) : undefined
       const storageCode = su ? `${su.code} (${su.label})` : line.storageUnitId
       return {
         id: line.id,
@@ -687,16 +698,16 @@ export type CreatePurchaseResult =
 export function createPurchase(input: CreatePurchaseInput): CreatePurchaseResult {
   const bon = input.bonNumber.trim()
   if (!bon) return { ok: false, error: 'Bon number is required.' }
-  if (state.purchases.some((p) => p.bonNumber.toLowerCase() === bon.toLowerCase())) {
+  if (active().purchases.some((p) => p.bonNumber.toLowerCase() === bon.toLowerCase())) {
     return { ok: false, error: 'A purchase with this bon number already exists.' }
   }
-  if (!state.suppliers.some((s) => s.id === input.supplierId)) {
+  if (!active().suppliers.some((s) => s.id === input.supplierId)) {
     return { ok: false, error: 'Supplier not found.' }
   }
-  if (!state.personnel.some((p) => p.id === input.issuedByPersonnelId)) {
+  if (!active().personnel.some((p) => p.id === input.issuedByPersonnelId)) {
     return { ok: false, error: 'Issued-by (personnel) not found.' }
   }
-  if (!state.sites.some((s) => s.id === input.siteId)) {
+  if (!active().sites.some((s) => s.id === input.siteId)) {
     return { ok: false, error: 'Site not found.' }
   }
   if (input.lines.length < 1) {
@@ -704,10 +715,10 @@ export function createPurchase(input: CreatePurchaseInput): CreatePurchaseResult
   }
   for (const line of input.lines) {
     if (line.quantity < 1) return { ok: false, error: 'Each line needs quantity at least 1.' }
-    if (!state.products.some((p) => p.id === line.productId)) {
+    if (!active().products.some((p) => p.id === line.productId)) {
       return { ok: false, error: 'Product not found on a line.' }
     }
-    if (!state.storageUnits.some((u) => u.id === line.storageUnitId)) {
+    if (!active().storageUnits.some((u) => u.id === line.storageUnitId)) {
       return { ok: false, error: 'Storage unit not found on a line.' }
     }
   }
@@ -746,7 +757,7 @@ export function createPurchase(input: CreatePurchaseInput): CreatePurchaseResult
 export type ReceivePurchaseResult = { ok: true } | { ok: false; error: string }
 
 export function receivePurchase(purchaseId: string): ReceivePurchaseResult {
-  const purchase = state.purchases.find((p) => p.id === purchaseId)
+  const purchase = active().purchases.find((p) => p.id === purchaseId)
   if (!purchase) return { ok: false, error: 'Purchase not found.' }
   if (purchase.status === 'received') {
     return { ok: false, error: 'This purchase is already received into stock.' }
@@ -754,7 +765,7 @@ export function receivePurchase(purchaseId: string): ReceivePurchaseResult {
   if (purchase.status === 'cancelled') {
     return { ok: false, error: 'Cancelled purchase cannot be received.' }
   }
-  const lines = state.purchaseLines.filter((l) => l.purchaseId === purchaseId)
+  const lines = active().purchaseLines.filter((l) => l.purchaseId === purchaseId)
   if (lines.length === 0) return { ok: false, error: 'No lines on this purchase.' }
 
   for (const line of lines) {
@@ -792,7 +803,7 @@ export function updatePortalUser(
   userId: string,
   permissions: Record<PageKey, PageCrud>,
 ): { ok: true } | { ok: false; error: string } {
-  if (!state.users.some((u) => u.id === userId)) {
+  if (!active().users.some((u) => u.id === userId)) {
     return { ok: false, error: 'User not found.' }
   }
   setState((s) => {
@@ -802,21 +813,21 @@ export function updatePortalUser(
 }
 
 export function getPortalUserById(id: string): PortalUser | undefined {
-  return state.users.find((u) => u.id === id)
+  return active().users.find((u) => u.id === id)
 }
 
 export function getProductById(id: string): Product | undefined {
-  return state.products.find((p) => p.id === id)
+  return active().products.find((p) => p.id === id)
 }
 
 export function getMovementsForProduct(productId: string): ProductMovement[] {
-  return state.productMovements
+  return active().productMovements
     .filter((m) => m.productId === productId)
     .sort((a, b) => (a.at < b.at ? 1 : -1))
 }
 
 export function getStockPositionsForProduct(productId: string): StockPosition[] {
-  return state.stockPositions.filter((p) => p.productId === productId && p.quantity > 0)
+  return active().stockPositions.filter((p) => p.productId === productId && p.quantity > 0)
 }
 
 /** Stock positions for one product with joined labels (product stock tab). */
@@ -828,9 +839,9 @@ export type ProductStockRow = StockPosition & {
 
 export function buildProductStockRows(productId: string): ProductStockRow[] {
   return getStockPositionsForProduct(productId).map((pos) => {
-    const su = state.storageUnits.find((u) => u.id === pos.storageUnitId)
-    const site = su ? state.sites.find((s) => s.id === su.siteId) : undefined
-    const company = site ? state.companies.find((c) => c.id === site.companyId) : undefined
+    const su = active().storageUnits.find((u) => u.id === pos.storageUnitId)
+    const site = su ? active().sites.find((s) => s.id === su.siteId) : undefined
+    const company = site ? active().companies.find((c) => c.id === site.companyId) : undefined
     const storageCode = su ? `${su.code} (${su.label})` : pos.storageUnitId
     return {
       ...pos,
@@ -842,18 +853,18 @@ export function buildProductStockRows(productId: string): ProductStockRow[] {
 }
 
 export function getReportsForProduct(productId: string): ProductReportRow[] {
-  return state.productReports.filter((r) => r.productId === productId)
+  return active().productReports.filter((r) => r.productId === productId)
 }
 
 export function getStorageUnitsForProduct(productId: string) {
   const posIds = new Set(
-    state.stockPositions.filter((p) => p.productId === productId).map((p) => p.storageUnitId),
+    active().stockPositions.filter((p) => p.productId === productId).map((p) => p.storageUnitId),
   )
-  return state.storageUnits
+  return active().storageUnits
     .filter((u) => posIds.has(u.id))
     .map((u) => {
-      const site = state.sites.find((s) => s.id === u.siteId)
-      const company = site ? state.companies.find((c) => c.id === site.companyId) : undefined
+      const site = active().sites.find((s) => s.id === u.siteId)
+      const company = site ? active().companies.find((c) => c.id === site.companyId) : undefined
       return {
         id: u.id,
         code: u.code,
@@ -867,10 +878,9 @@ export function getStorageUnitsForProduct(productId: string) {
 
 /** Dev / tests: reset in-memory state to seeds. */
 export function resetMockStore() {
-  state = cloneSeeds()
+  memState = cloneSeeds()
+  liveSnapshot = null
   emit()
 }
 
-export function useMockStore(): StoreState {
-  return useSyncExternalStore(subscribeMockStore, getMockStoreSnapshot, getMockStoreSnapshot)
-}
+export { useMockStore } from './useMockStore'

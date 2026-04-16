@@ -202,7 +202,7 @@ $SUDO chown -R www-data:www-data "$WEB_ROOT" 2>/dev/null || $SUDO chown -R nginx
 SITE_PATH="/etc/nginx/sites-available/it-department-portal.conf"
 echo "Writing nginx site to $SITE_PATH …"
 $SUDO tee "$SITE_PATH" >/dev/null <<'NGINX_CONF'
-# IT Department portal — SPA fallback
+# IT Department portal — SPA + API reverse proxy
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
@@ -210,6 +210,15 @@ server {
 
     root WEB_ROOT_PLACEHOLDER;
     index index.html;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 
     location /assets/ {
         add_header Cache-Control "public, max-age=31536000, immutable";
@@ -245,7 +254,9 @@ if [[ "$INSTALL_MARIADB" == "1" ]]; then
 fi
 echo ""
 echo "Notes:"
-echo "  - Point your future API at MariaDB using the variables in $CRED_FILE."
+echo "  - API: install Node API under backend/ (see docs/deploy/PRODUCTION.md), systemd unit deploy/it-department-api.service, then systemctl start it-department-api."
+echo "  - nginx proxies /api/ → 127.0.0.1:4000; set VITE_API_BASE_URL=/api/v1 at SPA build time for same-origin calls."
+echo "  - Point the API at MariaDB using DATABASE_* variables (see backend/.env.example and $CRED_FILE)."
 echo "  - PostgreSQL reference DDL remains in docs/database/schema.sql if you prefer Postgres later."
 echo "  - HTTPS: use certbot and set server_name in nginx."
 echo "  - DevExtreme: commercial key in src/config/license.ts when not using evaluation."

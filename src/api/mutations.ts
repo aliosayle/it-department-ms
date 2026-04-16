@@ -6,7 +6,7 @@
 import { apiPatchJson, apiPostJson } from '@/api/http'
 import { isLiveApi } from '@/api/config'
 import { isPortalApiError } from '@/api/errors'
-import { reloadPortalAfterLiveMutation } from '@/api/liveReload'
+import { queryClient } from '@/lib/queryClient'
 import type {
   Company,
   CreateDeliveryInput,
@@ -45,7 +45,7 @@ export async function portalReceiveStock(
   if (!isLiveApi()) return receiveStock(input)
   try {
     await apiPostJson('/inventory/receive', input)
-    reloadPortalAfterLiveMutation()
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     return { ok: true }
   } catch (e) {
     return mapLiveFailure(e)
@@ -58,7 +58,7 @@ export async function portalTransferStock(
   if (!isLiveApi()) return transferStock(input)
   try {
     await apiPostJson('/inventory/transfer', input)
-    reloadPortalAfterLiveMutation()
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     return { ok: true }
   } catch (e) {
     return mapLiveFailure(e)
@@ -70,7 +70,7 @@ export async function portalCreateDelivery(input: CreateDeliveryInput): Promise<
   try {
     const delivery = await apiPostJson<Delivery>('/deliveries', input)
     if (!delivery?.id) return { ok: false, error: 'Invalid response from server.' }
-    reloadPortalAfterLiveMutation()
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     return { ok: true, delivery }
   } catch (e) {
     return mapLiveFailure(e) as CreateDeliveryResult
@@ -82,7 +82,7 @@ export async function portalCreatePurchase(input: CreatePurchaseInput): Promise<
   try {
     const purchase = await apiPostJson<Purchase>('/purchases', input)
     if (!purchase?.id) return { ok: false, error: 'Invalid response from server.' }
-    reloadPortalAfterLiveMutation()
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     return { ok: true, purchase }
   } catch (e) {
     return mapLiveFailure(e) as CreatePurchaseResult
@@ -93,7 +93,7 @@ export async function portalReceivePurchase(purchaseId: string): Promise<Receive
   if (!isLiveApi()) return receivePurchase(purchaseId)
   try {
     await apiPostJson(`/purchases/${encodeURIComponent(purchaseId)}/receive`, {})
-    reloadPortalAfterLiveMutation()
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     return { ok: true }
   } catch (e) {
     return mapLiveFailure(e) as ReceivePurchaseResult
@@ -107,7 +107,7 @@ export async function portalUpdatePortalUser(
   if (!isLiveApi()) return updatePortalUser(userId, permissions)
   try {
     await apiPatchJson(`/users/${encodeURIComponent(userId)}/permissions`, { permissions })
-    reloadPortalAfterLiveMutation()
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     return { ok: true }
   } catch (e) {
     return mapLiveFailure(e)
@@ -118,7 +118,7 @@ export async function portalAddCompany(name: string, notes = ''): Promise<Compan
   if (!isLiveApi()) return addCompany(name, notes)
   const row = await apiPostJson<Company>('/companies', { name, notes })
   if (!row?.id) throw new Error('Invalid response from server.')
-  reloadPortalAfterLiveMutation()
+  void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
   return row
 }
 
@@ -131,7 +131,7 @@ export async function portalAddSite(
   try {
     const site = await apiPostJson<import('@/mocks/domain/types').Site>('/sites', { companyId, name, location })
     if (!site?.id) return { ok: false, error: 'Invalid response from server.' }
-    reloadPortalAfterLiveMutation()
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     return { ok: true, site }
   } catch (e) {
     return mapLiveFailure(e)
@@ -155,7 +155,7 @@ export async function portalAddPersonnel(
       siteId,
     })
     if (!personnel?.id) return { ok: false, error: 'Invalid response from server.' }
-    reloadPortalAfterLiveMutation()
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     return { ok: true, personnel }
   } catch (e) {
     return mapLiveFailure(e)
@@ -180,6 +180,6 @@ export async function portalAddSupplier(
     notes,
   })
   if (!row?.id) throw new Error('Invalid response from server.')
-  reloadPortalAfterLiveMutation()
+  void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
   return row
 }

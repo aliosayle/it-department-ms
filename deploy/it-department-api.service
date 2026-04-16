@@ -1,0 +1,18 @@
+[Unit]
+Description=IT Department portal REST API (Fastify + MariaDB)
+After=network.target mysql.service mariadb.service
+Wants=mariadb.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/it-department/backend
+Environment=NODE_ENV=production
+EnvironmentFile=-/etc/it-department/api.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -45,8 +45,12 @@ async function requireAuth(req: FastifyRequest, reply: FastifyReply) {
 export async function buildApp() {
   const app = Fastify({ logger: true })
 
+  const corsRaw = config.corsOrigin.trim()
+  const corsOriginOpt: boolean | string[] =
+    corsRaw === '*' ? true : corsRaw.split(',').map((s) => s.trim()).filter((s) => s.length > 0)
+
   await app.register(cors, {
-    origin: config.corsOrigin.split(',').map((s) => s.trim()),
+    origin: corsOriginOpt,
     credentials: true,
   })
 

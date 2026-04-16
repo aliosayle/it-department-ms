@@ -24,20 +24,22 @@ SEED_SUPERADMIN_LOGIN=superadmin SEED_SUPERADMIN_PASSWORD='your-secure-password'
 
 ## 2. API (systemd)
 
-1. Copy the application tree so **`backend/`** exists at **`/opt/it-department/backend`** (or change paths below).
-2. Build: `npm ci && npm run build` inside `backend/`.
-3. Install environment file **`/etc/it-department/api.env`** (mode `600`), mapping variables from `backend/.env.example` (use the same `DATABASE_*` and `JWT_SECRET` as runtime).
-4. Install the unit file:
+With **`INSTALL_NGINX=1`** (default), **`scripts/setup-ubuntu.sh`** already runs **`npm run build`** in **`backend/`**, copies **`backend/.env`** to **`/etc/it-department/api.env`**, installs **`it-department-api.service`** ( **`User`/`Group`** = owner of the repo tree so a clone under `/home/...` works), enables it, and checks **`http://127.0.0.1:4000/health`**. If nginx returns **502**, the usual cause is the API not running: **`sudo systemctl status it-department-api`** and **`journalctl -u it-department-api -n 80 --no-pager`**.
+
+Manual install (e.g. **`/opt/it-department`** layout):
+
+1. Build: `npm ci && npm run build` inside `backend/`.
+2. Install **`/etc/it-department/api.env`** (mode `600`, root-owned) with the same variables as **`backend/.env`** (`DATABASE_*`, `JWT_SECRET`, `PORT`, `CORS_ORIGIN`; use **`CORS_ORIGIN=*`** behind nginx so any browser `Origin` is allowed via reflection).
+3. Copy **`deploy/it-department-api.service`** to **`/etc/systemd/system/`**, edit **`WorkingDirectory`**, **`User`**, and **`ExecStart`** (`which node`) to match your paths, then:
 
    ```bash
-   sudo cp deploy/it-department-api.service /etc/systemd/system/
    sudo systemctl daemon-reload
    sudo systemctl enable --now it-department-api
    ```
 
-5. Confirm: `curl -sS http://127.0.0.1:4000/health`
+4. Confirm: `curl -sS http://127.0.0.1:4000/health`
 
-The bundled unit uses **`WorkingDirectory=/opt/it-department/backend`** and **`ExecStart=/usr/bin/node dist/index.js`**. Adjust `User`/`WorkingDirectory` if your layout differs.
+The template unit uses **`WorkingDirectory=/opt/it-department/backend`**. The Ubuntu setup script instead generates a unit with **`WorkingDirectory`** set to your actual clone path.
 
 ## 3. SPA build
 

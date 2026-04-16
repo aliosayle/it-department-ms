@@ -133,6 +133,75 @@ install_nginx_server() {
   log_info "nginx package installed."
 }
 
+# Installs systemd unit + /etc/it-department/api.env so nginx is not left proxying to a dead :4000 (502).
+install_api_systemd() {
+  [[ "$INSTALL_NGINX" != "1" ]] && return 0
+  [[ -f "$REPO_ROOT/backend/package.json" ]] || {
+    log_info "No backend/package.json — skipping REST API systemd unit."
+    return 0
+  }
+  [[ -f "$REPO_ROOT/backend/dist/index.js" ]] || {
+    log_info "No backend/dist/index.js — skipping API service (expected after npm run build in backend/)."
+    return 0
+  }
+  [[ -f "$REPO_ROOT/backend/.env" ]] || {
+    log_info "No backend/.env — skipping API service install."
+    return 0
+  }
+
+  require_cmd systemctl
+  NODE_BIN="$(command -v node)"
+  [[ -x "$NODE_BIN" ]] || die "node not executable: $NODE_BIN"
+
+  API_USER="$(stat -c '%U' "$REPO_ROOT" 2>/dev/null || echo root)"
+  API_GROUP="$(stat -c '%G' "$REPO_ROOT" 2>/dev/null || echo root)"
+  log_info "Installing REST API systemd unit (User=$API_USER, WorkingDirectory=$REPO_ROOT/backend)…"
+
+  $SUDO mkdir -p /etc/it-department
+  $SUDO install -m 600 -o root -g root "$REPO_ROOT/backend/.env" /etc/it-department/api.env
+  log_info "Installed /etc/it-department/api.env (from backend/.env; root-readable for systemd only)."
+
+  $SUDO tee /etc/systemd/system/it-department-api.service >/dev/null <<UNIT
+[Unit]
+Description=IT Department portal REST API (Fastify + MariaDB)
+After=network-online.target mariadb.service mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${API_USER}
+Group=${API_GROUP}
+WorkingDirectory=${REPO_ROOT}/backend
+EnvironmentFile=/etc/it-department/api.env
+ExecStart=${NODE_BIN} dist/index.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+  $SUDO systemctl daemon-reload
+  $SUDO systemctl enable it-department-api.service
+  $SUDO systemctl restart it-department-api.service
+  log_info "systemd: it-department-api.service enabled and restarted."
+
+  local ok=0
+  for _ in {1..20}; do
+    if curl -sfS --max-time 2 "http://127.0.0.1:4000/health" >/dev/null 2>&1; then
+      ok=1
+      break
+    fi
+    sleep 1
+  done
+  if [[ "$ok" != "1" ]]; then
+    log_info "API health check failed after 20s. Diagnostics:"
+    $SUDO systemctl --no-pager -l status it-department-api.service 2>&1 | tail -n 30 || true
+    die "REST API did not respond on http://127.0.0.1:4000/health (nginx would return 502). Fix errors above, then: sudo systemctl restart it-department-api"
+  fi
+  log_info "REST API healthy on port 4000."
+}
+
 find_repo_root() {
   local start="${1:-.}"
   local dir
@@ -267,7 +336,7 @@ DATABASE_PASSWORD=${DB_PASSWORD_VAL}
 JWT_SECRET=${JWT_SECRET_VAL}
 JWT_ACCESS_EXPIRES=15m
 JWT_REFRESH_EXPIRES=7d
-CORS_ORIGIN=http://127.0.0.1,http://localhost
+CORS_ORIGIN=*
 EOF
     chmod 600 "$REPO_ROOT/backend/.env" || true
     log_info "Wrote $REPO_ROOT/backend/.env (secrets not echoed)."
@@ -288,6 +357,8 @@ EOF
       fi
       npm run migrate
       SEED_SUPERADMIN_LOGIN="${SUPERADMIN_LOGIN}" SEED_SUPERADMIN_PASSWORD="${local_sa_pw}" npm run seed
+      log_info "Compiling backend for production (npm run build → dist/)…"
+      npm run build
     )
     log_info "Portal superadmin credentials file: $PORTAL_CRED_FILE (login: ${SUPERADMIN_LOGIN}; open file for password)"
   else
@@ -327,6 +398,7 @@ fi
 
 log_step "Phase 4 — nginx package, static deploy, site config"
 install_nginx_server
+install_api_systemd
 
 log_info "Deploying dist/ → $WEB_ROOT (clearing previous contents)…"
 $SUDO mkdir -p "$WEB_ROOT"
@@ -397,8 +469,8 @@ if [[ "$INSTALL_MARIADB" == "1" ]] && [[ -f "$REPO_ROOT/.credentials-portal.env"
   log_info "Portal login: $REPO_ROOT/.credentials-portal.env (superadmin seed)"
 fi
 log_info "Notes:"
-log_info "  - When MariaDB ran with backend/ present, backend/.env and a superadmin user were created; start the API from backend/ (see docs/deploy/PRODUCTION.md)."
-log_info "  - nginx proxies /api/ → 127.0.0.1:4000; set VITE_API_BASE_URL=/api/v1 at SPA build time for same-origin calls."
+log_info "  - REST API: systemd unit it-department-api.service (port 4000); logs: journalctl -u it-department-api -f"
+log_info "  - nginx proxies /api/ → 127.0.0.1:4000; SPA build uses VITE_API_BASE_URL=/api/v1 unless overridden."
 log_info "  - Point the API at MariaDB using DATABASE_* variables (see backend/.env.example and $CRED_FILE)."
 log_info "  - PostgreSQL reference DDL remains in docs/database/schema.sql if you prefer Postgres later."
 log_info "  - HTTPS: use certbot and set server_name in nginx."

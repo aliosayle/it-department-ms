@@ -1,5 +1,5 @@
 -- IT Department portal — MariaDB / MySQL schema (aligned with docs/database/schema.sql)
--- Target: MariaDB 10.6+ (Ubuntu 22.04+) with utf8mb4
+-- Target: MariaDB 10.6+ (Ubuntu 22.04+) with utf8mb4. Applied by scripts/setup-ubuntu.sh.
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -168,11 +168,11 @@ CREATE TABLE IF NOT EXISTS deliveries (
   stock_position_id VARCHAR(36) NULL,
   quantity INT NOT NULL,
   item_received_date DATE NULL,
-  item_description TEXT NOT NULL,
-  delivered_to TEXT NOT NULL,
-  site_label TEXT NOT NULL,
+  item_description TEXT NOT NULL DEFAULT '',
+  delivered_to TEXT NOT NULL DEFAULT '',
+  site_label TEXT NOT NULL DEFAULT '',
   date_delivered DATE NOT NULL,
-  description TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
   company_id VARCHAR(36) NOT NULL,
   site_id VARCHAR(36) NOT NULL,
   personnel_id VARCHAR(36) NOT NULL,

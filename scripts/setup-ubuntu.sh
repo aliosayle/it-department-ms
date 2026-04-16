@@ -12,7 +12,7 @@
 #   WEB_ROOT=/var/www/it-department-portal
 #   DB_NAME=it_department
 #   DB_USER=it_department_app
-#   DB_APP_PASSWORD=secret     If unset, a random password is generated
+#   DB_APP_PASSWORD=secret     If unset, a random hex password is generated (avoid ' in the value)
 #   DB_HOST=localhost          Written to credentials file (app use)
 #   DB_RESET=0                 Set 1 to DROP DATABASE (destructive) then recreate
 #   SKIP_APT=1               Skip apt (you must pre-install deps yourself)
@@ -78,8 +78,8 @@ install_mariadb_server() {
   [[ "$INSTALL_MARIADB" != "1" ]] && return 0
   echo "Installing MariaDB server…"
   apt_install mariadb-server mariadb-client
-  $SUDO systemctl enable mariadb
-  $SUDO systemctl start mariadb
+  $SUDO systemctl enable mariadb 2>/dev/null || $SUDO systemctl enable mysql
+  $SUDO systemctl start mariadb 2>/dev/null || $SUDO systemctl start mysql
 }
 
 install_nginx_server() {
@@ -127,7 +127,9 @@ require_cmd npm
 CRED_FILE="$REPO_ROOT/.credentials-mariadb.env"
 
 if [[ "$INSTALL_MARIADB" == "1" ]]; then
-  require_cmd mysql
+  command -v mysql >/dev/null 2>&1 || command -v mariadb >/dev/null 2>&1 || die "MariaDB client (mysql) not found after install."
+  MYSQL_CLI="mysql"
+  command -v mysql >/dev/null 2>&1 || MYSQL_CLI="mariadb"
   local_pw="$DB_APP_PASSWORD"
   if [[ -z "$local_pw" ]]; then
     local_pw="$(openssl rand -hex 24)"
@@ -136,20 +138,20 @@ if [[ "$INSTALL_MARIADB" == "1" ]]; then
   echo "Configuring MariaDB database '$DB_NAME' and user '$DB_USER'…"
 
   if [[ "$DB_RESET" == "1" ]]; then
-    $SUDO mysql -e "DROP DATABASE IF EXISTS \`${DB_NAME}\`;"
+    $SUDO "$MYSQL_CLI" -e "DROP DATABASE IF EXISTS \`${DB_NAME}\`;"
   fi
 
-  $SUDO mysql -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+  $SUDO "$MYSQL_CLI" -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
   # MariaDB: drop user if exists for clean password reset on re-run
-  $SUDO mysql -e "DROP USER IF EXISTS '${DB_USER}'@'localhost';"
-  $SUDO mysql -e "CREATE USER '${DB_USER}'@'localhost' IDENTIFIED BY '${local_pw}';"
-  $SUDO mysql -e "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost'; FLUSH PRIVILEGES;"
+  $SUDO "$MYSQL_CLI" -e "DROP USER IF EXISTS '${DB_USER}'@'localhost';"
+  $SUDO "$MYSQL_CLI" -e "CREATE USER '${DB_USER}'@'localhost' IDENTIFIED BY '${local_pw}';"
+  $SUDO "$MYSQL_CLI" -e "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost'; FLUSH PRIVILEGES;"
 
-  table_count="$($SUDO mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}';")"
+  table_count="$($SUDO "$MYSQL_CLI" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}';")"
   if [[ "${table_count:-0}" -eq 0 ]]; then
     echo "Applying schema from docs/database/schema-mariadb.sql …"
-    $SUDO mysql "$DB_NAME" <"$SCHEMA_SQL"
+    $SUDO "$MYSQL_CLI" "$DB_NAME" <"$SCHEMA_SQL"
   else
     echo "Database '$DB_NAME' already has tables; skipping schema import."
     echo "To wipe and re-import: DB_RESET=1 ./scripts/setup-ubuntu.sh (destructive)."

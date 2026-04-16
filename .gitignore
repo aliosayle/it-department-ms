@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Local secrets (MariaDB bootstrap from scripts/setup-ubuntu.sh)
+.credentials-mariadb.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

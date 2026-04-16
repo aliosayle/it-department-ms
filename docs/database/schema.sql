@@ -1,4 +1,5 @@
 -- IT Department portal — PostgreSQL schema (aligned with src/mocks/domain/types.ts)
+-- For MariaDB (e.g. scripts/setup-ubuntu.sh), see schema-mariadb.sql in this folder.
 -- Extensions optional: gen_random_uuid() requires pgcrypto or use uuid_generate_v4()
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";

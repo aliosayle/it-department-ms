@@ -83,6 +83,17 @@ export async function createDeliveryTx(
         await conn.rollback()
         return { ok: false, error: `Insufficient quantity (available: ${pos.quantity}).` }
       }
+      const [[whSite]] = await conn.query<RowDataPacket[]>(
+        'SELECT site_id AS siteId FROM storage_units WHERE id = ?',
+        [pos.storageUnitId],
+      )
+      if (!whSite || String(whSite.siteId) !== input.siteId) {
+        await conn.rollback()
+        return {
+          ok: false,
+          error: 'Stock position must be in a storage unit at the selected delivery site.',
+        }
+      }
       const [custodyRows] = await conn.query<RowDataPacket[]>(
         'SELECT id, code, label FROM storage_units WHERE personnel_id = ? AND kind = ? LIMIT 1',
         [input.personnelId, 'custody'],
@@ -282,12 +293,17 @@ export async function createPurchaseTx(
       await conn.rollback()
       return { ok: false, error: 'Supplier not found.' }
     }
-    const [[issuer]] = await conn.query<RowDataPacket[]>('SELECT id FROM personnel WHERE id = ?', [
-      input.issuedByPersonnelId,
-    ])
+    const [[issuer]] = await conn.query<RowDataPacket[]>(
+      'SELECT id, site_id AS siteId FROM personnel WHERE id = ?',
+      [input.issuedByPersonnelId],
+    )
     if (!issuer) {
       await conn.rollback()
       return { ok: false, error: 'Issued-by (personnel) not found.' }
+    }
+    if (String(issuer.siteId) !== input.siteId) {
+      await conn.rollback()
+      return { ok: false, error: 'Issued-by personnel must belong to the purchase site.' }
     }
     for (const line of input.lines) {
       if (Math.floor(line.quantity) < 1) {
@@ -299,10 +315,17 @@ export async function createPurchaseTx(
         await conn.rollback()
         return { ok: false, error: 'Product not found on a line.' }
       }
-      const [[su]] = await conn.query<RowDataPacket[]>('SELECT id FROM storage_units WHERE id = ?', [line.storageUnitId])
+      const [[su]] = await conn.query<RowDataPacket[]>(
+        'SELECT id, site_id AS siteId FROM storage_units WHERE id = ?',
+        [line.storageUnitId],
+      )
       if (!su) {
         await conn.rollback()
         return { ok: false, error: 'Storage unit not found on a line.' }
+      }
+      if (String(su.siteId) !== input.siteId) {
+        await conn.rollback()
+        return { ok: false, error: 'Each line storage unit must belong to the purchase site.' }
       }
     }
 
@@ -361,7 +384,7 @@ export async function receivePurchaseTx(pool: Pool, purchaseId: string): Promise
   try {
     await conn.beginTransaction()
     const [[purchase]] = await conn.query<RowDataPacket[]>(
-      'SELECT id, bon_number AS bonNumber, supplier_invoice_ref AS supplierInvoiceRef, status FROM purchases WHERE id = ? FOR UPDATE',
+      'SELECT id, site_id AS siteId, bon_number AS bonNumber, supplier_invoice_ref AS supplierInvoiceRef, status FROM purchases WHERE id = ? FOR UPDATE',
       [purchaseId],
     )
     if (!purchase) {
@@ -376,6 +399,11 @@ export async function receivePurchaseTx(pool: Pool, purchaseId: string): Promise
       await conn.rollback()
       return { ok: false, error: 'Cancelled purchase cannot be received.' }
     }
+    if (String(purchase.status) !== 'ordered') {
+      await conn.rollback()
+      return { ok: false, error: 'Only purchases in "ordered" status can be received into stock.' }
+    }
+    const purchaseSiteId = String(purchase.siteId)
     const [lines] = await conn.query<RowDataPacket[]>(
       'SELECT product_id AS productId, quantity, storage_unit_id AS storageUnitId FROM purchase_lines WHERE purchase_id = ?',
       [purchaseId],
@@ -383,6 +411,20 @@ export async function receivePurchaseTx(pool: Pool, purchaseId: string): Promise
     if (!lines.length) {
       await conn.rollback()
       return { ok: false, error: 'No lines on this purchase.' }
+    }
+
+    for (const line of lines) {
+      const [[su]] = await conn.query<RowDataPacket[]>(
+        'SELECT site_id AS siteId FROM storage_units WHERE id = ?',
+        [line.storageUnitId],
+      )
+      if (!su || String(su.siteId) !== purchaseSiteId) {
+        await conn.rollback()
+        return {
+          ok: false,
+          error: 'A purchase line targets storage that does not belong to this purchase\'s site.',
+        }
+      }
     }
 
     const bon = String(purchase.bonNumber ?? '')

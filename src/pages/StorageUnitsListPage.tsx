@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import type { RowClickEvent } from 'devextreme/ui/data_grid'
-import notify from 'devextreme/ui/notify'
+import Button from 'devextreme-react/button'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
 import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { storageUnitListGridConfig } from '@/pages/gridPageConfigs.stockDomain'
@@ -26,23 +26,30 @@ export function StorageUnitsListPage() {
       canEdit: perm.edit,
       canDelete: perm.delete,
       getViewHref: (r) => `/stock/storage-units/${String(r.id)}`,
-      onEdit: () => {
-        notify({
-          message: 'Storage unit edits use the detail page fields when available, or the API.',
-          type: 'info',
-          displayTime: 4000,
-        })
-      },
+      getEditHref: (r) => `/stock/storage-units/${String(r.id)}`,
     }),
     [perm.view, perm.edit, perm.delete],
   )
 
   return (
-    <PortalGridPage
-      config={storageUnitListGridConfig}
-      dataSource={rows}
-      onRowClick={onRowClick}
-      rowActions={rowActions}
-    />
+    <>
+      <div className="list-toolbar">
+        <p className="form-page__hint" style={{ margin: 0 }}>
+          Bins and shelves belong to a site; <strong>custody</strong> rows are tied to one person for deliveries from
+          stock.
+        </p>
+        {perm.create ? (
+          <Link to="/stock/storage-units/new">
+            <Button text="New storage unit" type="default" stylingMode="contained" />
+          </Link>
+        ) : null}
+      </div>
+      <PortalGridPage
+        config={storageUnitListGridConfig}
+        dataSource={rows}
+        onRowClick={onRowClick}
+        rowActions={rowActions}
+      />
+    </>
   )
 }

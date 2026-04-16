@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Button from 'devextreme-react/button'
 import NumberBox from 'devextreme-react/number-box'
 import SelectBox from 'devextreme-react/select-box'
@@ -35,6 +35,9 @@ export function StockTransferPage() {
 
   const fromPos = stockPositions.find((p) => p.id === fromStockPositionId)
 
+  const masterDataReady = products.length > 0 && storageUnits.length > 0
+  const hasTransferableQty = stockPositions.some((p) => p.quantity > 0)
+
   const storageOptions = useMemo(() => {
     return storageUnits
       .filter((u) => !fromPos || u.id !== fromPos.storageUnitId)
@@ -68,8 +71,21 @@ export function StockTransferPage() {
     <div className="form-page form-page--wide">
       {error ? <p className="form-page__error">{error}</p> : null}
       <p className="form-page__hint">
-        Moves quantity between storage units (same product). Writes paired transfer movements.
+        Moves quantity between storage units (same product). Writes paired transfer movements. Source and destination
+        must be at the same site (enforced by the API).
       </p>
+      {!masterDataReady ? (
+        <p className="form-page__hint form-page__hint--warn">
+          Add products and storage units first. <Link to="/products/new">New product</Link> ·{' '}
+          <Link to="/stock/storage-units/new">New storage unit</Link>
+        </p>
+      ) : null}
+      {masterDataReady && !hasTransferableQty ? (
+        <p className="form-page__hint form-page__hint--warn">
+          No stock positions with quantity yet. <Link to="/stock/receive">Receive stock</Link> or{' '}
+          <Link to="/purchases">receive a purchase</Link>.
+        </p>
+      ) : null}
       <SelectBox
         label="From stock position"
         dataSource={positionOptions}
@@ -77,6 +93,7 @@ export function StockTransferPage() {
         valueExpr="value"
         value={fromStockPositionId}
         searchEnabled
+        disabled={!masterDataReady || !hasTransferableQty}
         onValueChanged={(e) => setFromStockPositionId(e.value as string | null)}
       />
       <SelectBox
@@ -86,6 +103,7 @@ export function StockTransferPage() {
         valueExpr="value"
         value={toStorageUnitId}
         searchEnabled
+        disabled={!masterDataReady || !hasTransferableQty}
         onValueChanged={(e) => setToStorageUnitId(e.value as string | null)}
       />
       <NumberBox
@@ -106,7 +124,7 @@ export function StockTransferPage() {
           text="Transfer"
           type="default"
           stylingMode="contained"
-          disabled={!perm.create}
+          disabled={!perm.create || !masterDataReady || !hasTransferableQty}
           onClick={submit}
         />
         <Button text="Cancel" onClick={() => navigate('/stock')} />

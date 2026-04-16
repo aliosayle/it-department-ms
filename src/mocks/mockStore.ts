@@ -267,6 +267,15 @@ export function createDelivery(input: CreateDeliveryInput): CreateDeliveryResult
         error: `Insufficient quantity (available: ${active().stockPositions[idx].quantity}).`,
       }
     }
+    const fromStorage = active().storageUnits.find(
+      (u) => u.id === active().stockPositions[idx].storageUnitId,
+    )
+    if (fromStorage && fromStorage.siteId !== input.siteId) {
+      return {
+        ok: false,
+        error: 'Stock position must be in a storage unit at the selected delivery site.',
+      }
+    }
     const custodySu = active().storageUnits.find(
       (u) => u.personnelId === input.personnelId && u.kind === 'custody',
     )
@@ -672,8 +681,12 @@ export function createPurchase(input: CreatePurchaseInput): CreatePurchaseResult
   if (!active().suppliers.some((s) => s.id === input.supplierId)) {
     return { ok: false, error: 'Supplier not found.' }
   }
-  if (!active().personnel.some((p) => p.id === input.issuedByPersonnelId)) {
+  const issuer = active().personnel.find((p) => p.id === input.issuedByPersonnelId)
+  if (!issuer) {
     return { ok: false, error: 'Issued-by (personnel) not found.' }
+  }
+  if (issuer.siteId !== input.siteId) {
+    return { ok: false, error: 'Issued-by personnel must belong to the purchase site.' }
   }
   if (!active().sites.some((s) => s.id === input.siteId)) {
     return { ok: false, error: 'Site not found.' }
@@ -686,8 +699,12 @@ export function createPurchase(input: CreatePurchaseInput): CreatePurchaseResult
     if (!active().products.some((p) => p.id === line.productId)) {
       return { ok: false, error: 'Product not found on a line.' }
     }
-    if (!active().storageUnits.some((u) => u.id === line.storageUnitId)) {
+    const su = active().storageUnits.find((u) => u.id === line.storageUnitId)
+    if (!su) {
       return { ok: false, error: 'Storage unit not found on a line.' }
+    }
+    if (su.siteId !== input.siteId) {
+      return { ok: false, error: 'Each line storage unit must belong to the purchase site.' }
     }
   }
 
@@ -732,6 +749,9 @@ export function receivePurchase(purchaseId: string): ReceivePurchaseResult {
   }
   if (purchase.status === 'cancelled') {
     return { ok: false, error: 'Cancelled purchase cannot be received.' }
+  }
+  if (purchase.status !== 'ordered') {
+    return { ok: false, error: 'Only purchases in "ordered" status can be received into stock.' }
   }
   const lines = active().purchaseLines.filter((l) => l.purchaseId === purchaseId)
   if (lines.length === 0) return { ok: false, error: 'No lines on this purchase.' }

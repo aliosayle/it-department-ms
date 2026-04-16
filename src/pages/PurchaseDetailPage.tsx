@@ -13,20 +13,37 @@ import {
   getSupplierById,
   useMockStore,
 } from '@/mocks/mockStore'
+
+function purchaseStatusLabel(status: string): string {
+  switch (status) {
+    case 'ordered':
+      return 'Ordered'
+    case 'draft':
+      return 'Draft'
+    case 'received':
+      return 'Received'
+    case 'cancelled':
+      return 'Cancelled'
+    default:
+      return status
+  }
+}
 import { portalReceivePurchase } from '@/api/mutations'
 import './formPage.css'
 
 export function PurchaseDetailPage() {
   const { purchaseId = '' } = useParams<{ purchaseId: string }>()
-  useMockStore()
+  const { sites, companies } = useMockStore()
   const navigate = useNavigate()
   const perm = useCan('purchases')
   const purchase = getPurchaseById(purchaseId)
   const supplier = purchase ? getSupplierById(purchase.supplierId) : undefined
+  const site = purchase ? sites.find((s) => s.id === purchase.siteId) : undefined
+  const company = site ? companies.find((c) => c.id === site.companyId) : undefined
   const rows = buildPurchaseLineDetailRows(purchaseId)
   const [error, setError] = useState<string | null>(null)
 
-  const canReceive = purchase && (purchase.status === 'ordered' || purchase.status === 'draft')
+  const canReceive = purchase && purchase.status === 'ordered'
 
   const onRowClick = (e: RowClickEvent<PurchaseLineDetailRow, string | number>) => {
     const pid = e.data?.productId
@@ -46,8 +63,8 @@ export function PurchaseDetailPage() {
 
   const onReceive = async () => {
     setError(null)
-    if (!perm.create) {
-      setError('You do not have permission to receive purchases into stock.')
+    if (!perm.edit) {
+      setError('You do not have permission to receive purchases into stock (purchases edit).')
       return
     }
     const res = await portalReceivePurchase(purchaseId)
@@ -87,14 +104,15 @@ export function PurchaseDetailPage() {
       </div>
 
       <p className="form-page__hint" style={{ marginTop: 0 }}>
-        <strong>Bon:</strong> {purchase.bonNumber} · <strong>Status:</strong> {purchase.status} ·{' '}
-        <strong>Ordered:</strong> {purchase.orderedAt}
+        <strong>Bon:</strong> {purchase.bonNumber} · <strong>Status:</strong>{' '}
+        {purchaseStatusLabel(purchase.status)} · <strong>Ordered:</strong> {purchase.orderedAt}
         {purchase.expectedAt ? ` · Expected: ${purchase.expectedAt}` : ''}
         {purchase.receivedAt ? ` · Received: ${purchase.receivedAt}` : ''}
       </p>
       <p className="form-page__hint">
-        Supplier ref: {purchase.supplierInvoiceRef || '—'} · Site id: {purchase.siteId} · Notes:{' '}
-        {purchase.notes || '—'}
+        Supplier ref: {purchase.supplierInvoiceRef || '—'} · <strong>Site:</strong>{' '}
+        {site ? `${site.name}${company ? ` (${company.name})` : ''}` : purchase.siteId}
+        {site ? '' : ' — add sites in master data if this looks wrong.'} · Notes: {purchase.notes || '—'}
       </p>
 
       <h3 style={{ fontSize: '1rem', marginBottom: 8 }}>Lines — click a row to open product stock</h3>
@@ -111,13 +129,12 @@ export function PurchaseDetailPage() {
             text="Receive into stock (all lines)"
             type="default"
             stylingMode="contained"
-            disabled={!perm.create}
+            disabled={!perm.edit}
             onClick={onReceive}
           />
           <p className="form-page__hint" style={{ margin: 0 }}>
-            Each line is posted to stock using the same workflow as{' '}
-            <Link to="/stock/receive">Receive stock</Link>, with ledger entries linked to this
-            purchase for audit.
+            Requires <strong>purchases</strong> edit permission (same as the API). Each line is posted to stock like{' '}
+            <Link to="/stock/receive">Receive stock</Link>, with ledger entries linked to this purchase.
           </p>
         </div>
       ) : null}

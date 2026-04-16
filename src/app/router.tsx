@@ -21,6 +21,7 @@ import { ProductReportsPage } from '@/pages/ProductReportsPage'
 import { ProductStockPage } from '@/pages/ProductStockPage'
 import { ProductStoragePage } from '@/pages/ProductStoragePage'
 import { ProductTabRedirect } from '@/pages/ProductTabRedirect'
+import { ProductNewPage } from '@/pages/ProductNewPage'
 import { ProductsListPage } from '@/pages/ProductsListPage'
 import { PurchaseDetailPage } from '@/pages/PurchaseDetailPage'
 import { PurchaseNewPage } from '@/pages/PurchaseNewPage'
@@ -34,6 +35,7 @@ import { StockListPage } from '@/pages/StockListPage'
 import { StockReceivePage } from '@/pages/StockReceivePage'
 import { StockTransferPage } from '@/pages/StockTransferPage'
 import { StorageUnitDetailPage } from '@/pages/StorageUnitDetailPage'
+import { StorageUnitNewPage } from '@/pages/StorageUnitNewPage'
 import { StorageUnitsListPage } from '@/pages/StorageUnitsListPage'
 import { UserEquipmentDetailPage } from '@/pages/UserEquipmentDetailPage'
 import { UserEquipmentListPage } from '@/pages/UserEquipmentListPage'
@@ -106,6 +108,14 @@ export function AppRoutes() {
           }
         />
         <Route
+          path="stock/storage-units/new"
+          element={
+            <PageGuard page="storageUnits" require="create">
+              <StorageUnitNewPage />
+            </PageGuard>
+          }
+        />
+        <Route
           path="stock/storage-units/:storageUnitId"
           element={
             <PageGuard page="storageUnits">
@@ -158,6 +168,14 @@ export function AppRoutes() {
           element={
             <PageGuard page="products">
               <ProductsListPage />
+            </PageGuard>
+          }
+        />
+        <Route
+          path="products/new"
+          element={
+            <PageGuard page="products" require="create">
+              <ProductNewPage />
             </PageGuard>
           }
         />

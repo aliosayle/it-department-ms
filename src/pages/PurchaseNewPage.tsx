@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Button from 'devextreme-react/button'
 import DateBox from 'devextreme-react/date-box'
@@ -33,13 +33,38 @@ export function PurchaseNewPage() {
   const [bonNumber, setBonNumber] = useState('')
   const [supplierInvoiceRef, setSupplierInvoiceRef] = useState('')
   const [supplierId, setSupplierId] = useState<string | null>(null)
-  const [siteId, setSiteId] = useState<string | null>('site-1')
-  const [issuedByPersonnelId, setIssuedByPersonnelId] = useState<string | null>('per-1')
+  const [siteId, setSiteId] = useState<string | null>(null)
+  const [issuedByPersonnelId, setIssuedByPersonnelId] = useState<string | null>(null)
   const [orderedAt, setOrderedAt] = useState<Date | null>(new Date())
   const [expectedAt, setExpectedAt] = useState<Date | null>(null)
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()])
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (siteId !== null || sites.length === 0) return
+    setSiteId(sites[0].id)
+  }, [sites, siteId])
+
+  useEffect(() => {
+    if (!siteId) return
+    setIssuedByPersonnelId((pid) => {
+      if (pid && personnel.some((p) => p.id === pid && p.siteId === siteId)) return pid
+      return personnel.find((p) => p.siteId === siteId)?.id ?? null
+    })
+  }, [siteId, personnel])
+
+  useEffect(() => {
+    if (!siteId) return
+    setLines((prev) =>
+      prev.map((line) => {
+        if (!line.storageUnitId) return line
+        const u = storageUnits.find((x) => x.id === line.storageUnitId)
+        if (u?.siteId === siteId) return line
+        return { ...line, storageUnitId: null }
+      }),
+    )
+  }, [siteId, storageUnits])
 
   const supplierOptions = useMemo(
     () => suppliers.map((s) => ({ value: s.id, text: s.name })),
@@ -67,10 +92,12 @@ export function PurchaseNewPage() {
     [products],
   )
 
-  const storageOptions = useMemo(
-    () => storageUnits.map((u) => ({ value: u.id, text: `${u.code} — ${u.label}` })),
-    [storageUnits],
-  )
+  const storageOptions = useMemo(() => {
+    if (!siteId) return []
+    return storageUnits
+      .filter((u) => u.siteId === siteId)
+      .map((u) => ({ value: u.id, text: `${u.code} — ${u.label}` }))
+  }, [storageUnits, siteId])
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()])
   const removeLine = (idx: number) => setLines((prev) => prev.filter((_, i) => i !== idx))
@@ -83,6 +110,14 @@ export function PurchaseNewPage() {
     setError(null)
     if (!perm.create) {
       setError('You do not have permission to create purchases.')
+      return
+    }
+    if (!supplierId) {
+      setError('Supplier is required.')
+      return
+    }
+    if (!siteId || !issuedByPersonnelId) {
+      setError('Site and issued-by personnel are required.')
       return
     }
     if (!orderedAt) {
@@ -100,6 +135,11 @@ export function PurchaseNewPage() {
         quantity: Math.floor(l.quantity!),
         unitPrice: Number(l.unitPrice ?? 0),
       }))
+
+    if (normalizedLines.length < 1) {
+      setError('Add at least one complete line (product, storage at this site, quantity ≥ 1).')
+      return
+    }
 
     const result = await portalCreatePurchase({
       bonNumber,
@@ -120,12 +160,23 @@ export function PurchaseNewPage() {
     navigate(`/purchases/${result.purchase.id}`)
   }
 
+  const prerequisites =
+    suppliers.length > 0 && sites.length > 0 && personnel.length > 0 && products.length > 0 && storageUnits.length > 0
+
   return (
     <div className="form-page form-page--wide">
       {error ? <p className="form-page__error">{error}</p> : null}
       <p className="form-page__hint">
-        <Link to="/purchases">Purchases</Link> · <Link to="/master-data/suppliers">Suppliers</Link>
+        <Link to="/purchases">Purchases</Link> · <Link to="/master-data/suppliers">Suppliers</Link> ·{' '}
+        <Link to="/products/new">New product</Link> · <Link to="/stock/storage-units/new">New storage unit</Link>
       </p>
+
+      {!prerequisites ? (
+        <p className="form-page__hint form-page__hint--warn">
+          You need suppliers, sites, personnel, products, and storage units. Storage on each line must belong to the
+          selected site.
+        </p>
+      ) : null}
 
       <p className="form-page__section" style={{ marginTop: '1rem' }}>
         Commercial references
@@ -153,7 +204,7 @@ export function PurchaseNewPage() {
         Receipt context
       </p>
       <SelectBox
-        label="Site (receipt context)"
+        label="Site (receipt context — lines must use storage at this site)"
         dataSource={siteOptions}
         displayExpr="text"
         valueExpr="value"
@@ -165,7 +216,7 @@ export function PurchaseNewPage() {
         }}
       />
       <SelectBox
-        label="Issued by (internal)"
+        label="Issued by (internal — must be at this site)"
         dataSource={issuerOptions}
         displayExpr="text"
         valueExpr="value"
@@ -173,6 +224,11 @@ export function PurchaseNewPage() {
         searchEnabled
         onValueChanged={(e) => setIssuedByPersonnelId(e.value as string | null)}
       />
+      {siteId && storageOptions.length === 0 ? (
+        <p className="form-page__hint form-page__hint--warn">
+          No storage units at this site. <Link to="/stock/storage-units/new">Add one</Link> with the same site.
+        </p>
+      ) : null}
       <p className="form-page__section" style={{ marginTop: '1rem' }}>
         Schedule
       </p>
@@ -215,7 +271,7 @@ export function PurchaseNewPage() {
             onValueChanged={(e) => setLine(idx, { productId: e.value as string | null })}
           />
           <SelectBox
-            label="Receive into storage"
+            label="Receive into storage (this site only)"
             dataSource={storageOptions}
             displayExpr="text"
             valueExpr="value"
@@ -250,8 +306,8 @@ export function PurchaseNewPage() {
           text="Create purchase"
           type="default"
           stylingMode="contained"
-          disabled={!perm.create}
-          onClick={submit}
+          disabled={!perm.create || !prerequisites}
+          onClick={() => void submit()}
         />
         <Button text="Cancel" onClick={() => navigate('/purchases')} />
       </div>

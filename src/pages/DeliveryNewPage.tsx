@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import Button from 'devextreme-react/button'
 import DateBox from 'devextreme-react/date-box'
 import NumberBox from 'devextreme-react/number-box'
@@ -26,11 +26,41 @@ export function DeliveryNewPage() {
   const [siteLabel, setSiteLabel] = useState('')
   const [dateDelivered, setDateDelivered] = useState<Date | null>(new Date())
   const [description, setDescription] = useState('')
-  /* Defaults align with seeds (Astra / Av 24 / Haj Abed). */
-  const [companyId, setCompanyId] = useState<string | null>('co-1')
-  const [siteId, setSiteId] = useState<string | null>('site-1')
-  const [personnelId, setPersonnelId] = useState<string | null>('per-1')
+  const [companyId, setCompanyId] = useState<string | null>(null)
+  const [siteId, setSiteId] = useState<string | null>(null)
+  const [personnelId, setPersonnelId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (companyId !== null || companies.length === 0) return
+    setCompanyId(companies[0].id)
+  }, [companies, companyId])
+
+  useEffect(() => {
+    if (!companyId) {
+      setSiteId(null)
+      return
+    }
+    const first = sites.find((s) => s.companyId === companyId)
+    setSiteId((sid) => {
+      if (sid && sites.some((s) => s.id === sid && s.companyId === companyId)) return sid
+      return first?.id ?? null
+    })
+  }, [companyId, sites])
+
+  useEffect(() => {
+    if (!companyId || !siteId) {
+      setPersonnelId(null)
+      return
+    }
+    const first = personnel.find((p) => p.companyId === companyId && p.siteId === siteId)
+    setPersonnelId((pid) => {
+      if (pid && personnel.some((p) => p.id === pid && p.siteId === siteId && p.companyId === companyId)) {
+        return pid
+      }
+      return first?.id ?? null
+    })
+  }, [companyId, siteId, personnel])
 
   const companyOptions = useMemo(
     () => companies.map((c) => ({ value: c.id, text: c.name })),
@@ -51,26 +81,34 @@ export function DeliveryNewPage() {
       .map((p) => ({ value: p.id, text: `${p.fullName} <${p.email}>` }))
   }, [companyId, siteId, personnel])
 
-  const stockOptions = useMemo(
-    () =>
-      stockPositions
-        .filter((pos) => pos.quantity > 0)
-        .map((pos) => {
-          const pr = products.find((p) => p.id === pos.productId)
-          const su = storageUnits.find((u) => u.id === pos.storageUnitId)
-          return {
-            value: pos.id,
-            text: `${pos.id} — ${pr?.sku ?? '?'} @ ${su?.code ?? '?'} (qty ${pos.quantity})`,
-          }
-        }),
-    [stockPositions, products, storageUnits],
-  )
+  const stockOptions = useMemo(() => {
+    return stockPositions
+      .filter((pos) => pos.quantity > 0)
+      .map((pos) => {
+        const pr = products.find((p) => p.id === pos.productId)
+        const su = storageUnits.find((u) => u.id === pos.storageUnitId)
+        if (su?.kind === 'custody') return null
+        if (siteId && su?.siteId !== siteId) return null
+        const sku = pr?.sku ?? pos.productId
+        const loc = su ? `${su.code} — ${su.label}` : '—'
+        return {
+          value: pos.id,
+          text: `${sku} @ ${loc} (qty ${pos.quantity})`,
+        }
+      })
+      .filter((x): x is { value: string; text: string } => x != null)
+  }, [stockPositions, products, storageUnits, siteId])
 
   const maxQty = useMemo(() => {
     if (!stockPositionId) return undefined
     const row = stockPositions.find((s) => s.id === stockPositionId)
     return row?.quantity
   }, [stockPositionId, stockPositions])
+
+  const recipientHasCustody = useMemo(() => {
+    if (!personnelId) return false
+    return storageUnits.some((u) => u.personnelId === personnelId && u.kind === 'custody')
+  }, [personnelId, storageUnits])
 
   const submit = async () => {
     setError(null)
@@ -81,6 +119,18 @@ export function DeliveryNewPage() {
     if (!companyId || !siteId || !personnelId) {
       setError('Company, site, and recipient are required.')
       return
+    }
+    if (source === 'stock') {
+      if (!stockPositionId) {
+        setError('Select a warehouse stock position.')
+        return
+      }
+      if (!recipientHasCustody) {
+        setError(
+          'Recipient needs a custody storage unit. Create one at Storage units (kind: custody) for this person.',
+        )
+        return
+      }
     }
     const receivedStr =
       source === 'external' && itemReceivedDate
@@ -111,10 +161,26 @@ export function DeliveryNewPage() {
   }
 
   const fromStock = source === 'stock'
+  const masterDataReady = companies.length > 0 && sites.length > 0 && personnel.length > 0
 
   return (
     <div className="form-page form-page--wide">
       {error ? <p className="form-page__error">{error}</p> : null}
+
+      {!masterDataReady ? (
+        <p className="form-page__hint form-page__hint--warn">
+          Add at least one <Link to="/master-data/companies/new">company</Link>,{' '}
+          <Link to="/master-data/sites/new">site</Link>, and <Link to="/master-data/personnel/new">personnel</Link>{' '}
+          before creating a delivery.
+        </p>
+      ) : null}
+
+      <p className="form-page__hint">
+        <strong>From stock:</strong> quantity is removed from the selected warehouse bin and added to the recipient’s{' '}
+        <strong>custody</strong> bin (same product, status Issued).{' '}
+        <Link to="/stock/storage-units/new">New storage unit</Link> — use kind <strong>custody</strong> and assign the
+        recipient.
+      </p>
 
       <p className="form-page__section">Recipient</p>
       <SelectBox
@@ -150,6 +216,12 @@ export function DeliveryNewPage() {
         searchEnabled
         onValueChanged={(e) => setPersonnelId(e.value as string | null)}
       />
+      {personnelId && !recipientHasCustody ? (
+        <p className="form-page__hint form-page__hint--warn">
+          This person has no <strong>custody</strong> bin yet — stock-based delivery will fail until you add one (
+          <Link to="/stock/storage-units/new">new storage unit</Link>, same site, kind custody, holder = this person).
+        </p>
+      ) : null}
 
       <p className="form-page__section" style={{ marginTop: '1rem' }}>
         Source and quantity
@@ -172,7 +244,7 @@ export function DeliveryNewPage() {
       {fromStock ? (
         <>
           <SelectBox
-            label="Stock position"
+            label="Stock position (warehouse only, this site)"
             dataSource={stockOptions}
             displayExpr="text"
             valueExpr="value"
@@ -180,6 +252,12 @@ export function DeliveryNewPage() {
             searchEnabled
             onValueChanged={(e) => setStockPositionId(e.value as string | null)}
           />
+          {stockOptions.length === 0 ? (
+            <p className="form-page__hint">
+              No on-hand positions at this site in non-custody storage. Use <Link to="/stock/receive">Receive stock</Link>{' '}
+              or <Link to="/purchases">Purchases</Link> first.
+            </p>
+          ) : null}
           <NumberBox
             label="Quantity"
             value={quantity ?? undefined}
@@ -189,8 +267,8 @@ export function DeliveryNewPage() {
             onValueChanged={(e) => setQuantity(e.value as number | null)}
           />
           <p className="form-page__hint">
-            Item received date is not used when the source is stock. Stock quantity will
-            decrease for the selected position.
+            Item received date is not used when the source is stock. Warehouse quantity decreases; custody increases
+            for the recipient.
           </p>
         </>
       ) : (
@@ -238,8 +316,8 @@ export function DeliveryNewPage() {
           text="Create delivery"
           type="default"
           stylingMode="contained"
-          disabled={!perm.create}
-          onClick={submit}
+          disabled={!perm.create || !masterDataReady}
+          onClick={() => void submit()}
         />
         <Button text="Cancel" onClick={() => navigate('/delivery')} />
       </div>

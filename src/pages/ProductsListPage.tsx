@@ -8,6 +8,7 @@ import { useCan } from '@/auth/AuthContext'
 import { productsGridConfig } from '@/pages/gridPageConfigs.stockDomain'
 import type { Product } from '@/mocks/domain/types'
 import { useMockStore } from '@/mocks/mockStore'
+import './formPage.css'
 
 export function ProductsListPage() {
   const navigate = useNavigate()
@@ -36,8 +37,14 @@ export function ProductsListPage() {
     <>
       <div className="list-toolbar">
         <p className="form-page__hint" style={{ margin: 0 }}>
-          Click a row for product reports, history, stock positions, and storage.
+          Click a row for product reports, history, stock positions, and storage. Add SKUs here before receiving or
+          purchasing stock.
         </p>
+        {perm.create ? (
+          <Link to="/products/new">
+            <Button text="New product" type="default" stylingMode="contained" />
+          </Link>
+        ) : null}
         <Link to="/stock">
           <Button text="Stock overview" />
         </Link>
@@ -52,6 +59,23 @@ export function ProductsListPage() {
           </Link>
         ) : null}
       </div>
+      {products.length === 0 ? (
+        <p className="form-page__hint form-page__hint--warn" style={{ marginTop: 8 }}>
+          No products in the catalog yet. Create SKUs before receiving or purchasing stock.{' '}
+          {perm.create ? (
+            <>
+              <Link to="/products/new">New product</Link> ·{' '}
+            </>
+          ) : null}
+          <Link to="/stock/receive">Receive stock</Link>
+          {purchases.view ? (
+            <>
+              {' '}
+              · <Link to="/purchases">Purchases</Link>
+            </>
+          ) : null}
+        </p>
+      ) : null}
       <PortalGridPage
         config={productsGridConfig}
         dataSource={products}

@@ -20,6 +20,11 @@ Errors: `{ "error": "code", "message": "Human-readable detail" }`. **403** means
 | GET/POST | `/products` | **SKU unique** globally |
 | GET/POST | `/storage-units` | FK `siteId`; custody bins require `personnelId` aligned to same site |
 
+**POST bodies (implemented in Fastify):**
+
+- **`POST /products`** — `{ "sku", "name", "brand"?, "category"?, "description"? }`. SKU is unique case-insensitively; **409** if duplicate.
+- **`POST /storage-units`** — `{ "siteId", "code", "label", "kind"?, "personnelId"? }`. Default `kind` is `shelf`. For `kind: "custody"`, `personnelId` is required and that person must belong to `siteId`. **409** if `(siteId, code)` duplicate.
+
 ---
 
 ## Inventory reads
@@ -61,9 +66,10 @@ Manual inbound receive (non-purchase or purchase-linked via body).
 
 1. Load source position; ensure `quantity` ≤ on-hand; destination storage exists.
 2. Reject if source storage unit equals destination storage unit.
-3. Decrement source position; remove row if quantity becomes 0.
-4. Increment or insert destination `(same product_id, to_storage_unit_id)`.
-5. Generate shared `correlation_id`; insert **two** movements: `transfer_out` (negative delta) and `transfer_in` (positive delta), both with same `correlation_id`, labels from/to storage.
+3. **Same site:** source and destination storage units must share the same `site_id` (cross-site transfers are rejected).
+4. Decrement source position; remove row if quantity becomes 0.
+5. Increment or insert destination `(same product_id, to_storage_unit_id)`.
+6. Generate shared `correlation_id`; insert **two** movements: `transfer_out` (negative delta) and `transfer_in` (positive delta), both with same `correlation_id`, labels from/to storage.
 
 ---
 
@@ -74,7 +80,7 @@ Manual inbound receive (non-purchase or purchase-linked via body).
 **Handler**
 
 1. Validate company, site, personnel; personnel belongs to company and site.
-2. If `source === "stock"`: require `stockPositionId`; validate quantity ≤ position; resolve recipient **custody** `storage_unit` (`kind = custody`, `personnel_id` = recipient).
+2. If `source === "stock"`: require `stockPositionId`; validate quantity ≤ position; the stock position’s **storage unit** must have **`site_id` equal to the delivery `siteId`** (no cross-site issuance from warehouse bins). Resolve recipient **custody** `storage_unit` (`kind = custody`, `personnel_id` = recipient).
 3. Insert `deliveries` row.
 4. If `source === "stock"` in one transaction:
    - Decrement warehouse `stock_positions` row; strip if zero.
@@ -92,7 +98,7 @@ If `source === "external"`, no stock mutation; optional movements off-scope unle
 **Handler**
 
 1. Normalize `bonNumber`; enforce **unique (`company_id`, `bon_number`)** for the site’s company.
-2. Validate supplier, issuer personnel, site, each line product and storage.
+2. Validate supplier, site, each line product. **Issuer** (`issuedByPersonnelId`) must exist and their **`site_id` must equal the purchase `siteId`**. Each line’s **`storageUnitId`** must reference a storage unit whose **`site_id` equals the purchase `siteId`** (lines cannot target another site’s bins).
 3. Insert `purchases` (`status` e.g. `ordered`) and `purchase_lines`.
 
 ---
@@ -103,10 +109,12 @@ Receive all lines into stock (idempotent).
 
 **Handler** (single transaction)
 
-1. Load purchase; if `status === received` → **409 Conflict** or idempotent **204** (pick one policy; SPA today treats as error on second receive).
-2. If `cancelled` → 409.
+1. Load purchase; only **`status === ordered`** may be received; if `received` or `cancelled` → **409**. (If `draft` exists in the schema, it is not receivable until promoted to `ordered`.)
+2. Validate every line’s storage unit **`site_id` matches `purchases.site_id`** before posting (defensive; lines should already match from create).
 3. For each line: apply the same logic as `POST /inventory/receive` with `purchaseId` set, quantity from line, target `storageUnitId` from line, reason `Purchase`, note including bon / invoice / purchase id.
 4. Set purchase `status = received`, `received_at = current_date`.
+
+**Permission:** `POST /purchases/:id/receive` requires **`purchases` `edit`** (not create-only).
 
 ---
 

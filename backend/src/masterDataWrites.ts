@@ -50,6 +50,81 @@ export async function insertPersonnel(
   return { id, fullName: fullName.trim(), email: email.trim(), companyId, siteId }
 }
 
+export async function insertProduct(
+  pool: Pool,
+  row: { sku: string; name: string; brand: string; category: string; description: string },
+): Promise<Record<string, unknown>> {
+  const sku = row.sku.trim()
+  const name = row.name.trim()
+  if (!sku) throw Object.assign(new Error('SKU is required.'), { statusCode: 400 })
+  if (!name) throw Object.assign(new Error('Name is required.'), { statusCode: 400 })
+  const [[dup]] = await pool.query<RowDataPacket[]>('SELECT id FROM products WHERE LOWER(sku) = LOWER(?)', [sku])
+  if (dup) throw Object.assign(new Error('A product with this SKU already exists.'), { statusCode: 409 })
+  const id = nextId('pr')
+  await pool.query(
+    'INSERT INTO products (id, sku, name, brand, category, description) VALUES (?,?,?,?,?,?)',
+    [id, sku, name, (row.brand || '').trim(), (row.category || '').trim(), (row.description || '').trim()],
+  )
+  return {
+    id,
+    sku,
+    name,
+    brand: (row.brand || '').trim(),
+    category: (row.category || '').trim(),
+    description: (row.description || '').trim(),
+  }
+}
+
+export async function insertStorageUnit(
+  pool: Pool,
+  row: { siteId: string; code: string; label: string; kind: string; personnelId: string | null | undefined },
+): Promise<Record<string, unknown>> {
+  const siteId = row.siteId.trim()
+  const code = row.code.trim()
+  const label = row.label.trim()
+  const rawKind = (row.kind || 'shelf').trim().toLowerCase()
+  const kind = rawKind === 'custody' ? 'custody' : rawKind || 'shelf'
+  if (!siteId) throw Object.assign(new Error('Site is required.'), { statusCode: 400 })
+  if (!code) throw Object.assign(new Error('Code is required.'), { statusCode: 400 })
+  if (!label) throw Object.assign(new Error('Label is required.'), { statusCode: 400 })
+
+  const [[site]] = await pool.query<RowDataPacket[]>('SELECT id FROM sites WHERE id = ?', [siteId])
+  if (!site) throw Object.assign(new Error('Site not found.'), { statusCode: 400 })
+
+  let personnelId: string | null =
+    row.personnelId != null && String(row.personnelId).trim() !== '' ? String(row.personnelId).trim() : null
+  if (kind === 'custody') {
+    if (!personnelId) {
+      throw Object.assign(new Error('Custody storage requires a personnel holder.'), { statusCode: 400 })
+    }
+    const [[per]] = await pool.query<RowDataPacket[]>(
+      'SELECT id, site_id AS siteId FROM personnel WHERE id = ?',
+      [personnelId],
+    )
+    if (!per) throw Object.assign(new Error('Personnel not found.'), { statusCode: 400 })
+    if (String(per.siteId) !== siteId) {
+      throw Object.assign(new Error('Personnel must belong to the selected site.'), { statusCode: 400 })
+    }
+  } else {
+    personnelId = null
+  }
+
+  const id = nextId('su')
+  try {
+    await pool.query(
+      'INSERT INTO storage_units (id, site_id, code, label, kind, personnel_id) VALUES (?,?,?,?,?,?)',
+      [id, siteId, code, label, kind, personnelId],
+    )
+  } catch (e: unknown) {
+    const err = e as { code?: string; errno?: number }
+    if (err?.code === 'ER_DUP_ENTRY') {
+      throw Object.assign(new Error('This site already has a storage unit with that code.'), { statusCode: 409 })
+    }
+    throw e
+  }
+  return { id, siteId, code, label, kind, personnelId }
+}
+
 export async function insertSupplier(
   pool: Pool,
   row: {

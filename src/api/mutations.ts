@@ -14,8 +14,10 @@ import type {
   Delivery,
   PageCrud,
   PageKey,
+  Product,
   Purchase,
   ReceiveStockInput,
+  StorageUnit,
   Supplier,
   TransferStockInput,
 } from '@/mocks/domain/types'
@@ -190,4 +192,40 @@ export async function portalAddSupplier(
   if (!row?.id) throw new Error('Invalid response from server.')
   void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
   return row
+}
+
+export async function portalAddProduct(input: {
+  sku: string
+  name: string
+  brand?: string
+  category?: string
+  description?: string
+}): Promise<{ ok: true; product: Product } | { ok: false; error: string }> {
+  if (!isLiveApi()) return { ok: false, error: NEED_API }
+  try {
+    const product = await apiPostJson<Product>('/products', input)
+    if (!product?.id) return { ok: false, error: 'Invalid response from server.' }
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    return { ok: true, product }
+  } catch (e) {
+    return mapLiveFailure(e) as { ok: false; error: string }
+  }
+}
+
+export async function portalAddStorageUnit(input: {
+  siteId: string
+  code: string
+  label: string
+  kind: string
+  personnelId?: string | null
+}): Promise<{ ok: true; storageUnit: StorageUnit } | { ok: false; error: string }> {
+  if (!isLiveApi()) return { ok: false, error: NEED_API }
+  try {
+    const storageUnit = await apiPostJson<StorageUnit>('/storage-units', input)
+    if (!storageUnit?.id) return { ok: false, error: 'Invalid response from server.' }
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    return { ok: true, storageUnit }
+  } catch (e) {
+    return mapLiveFailure(e) as { ok: false; error: string }
+  }
 }

@@ -3,8 +3,10 @@ import type { PageKey } from '@/mocks/domain/types'
 
 /** First match wins — list most specific patterns first. */
 const rules: { pattern: string; page: PageKey }[] = [
+  { pattern: '/admin/users/new', page: 'users' },
   { pattern: '/admin/users/:userId', page: 'users' },
   { pattern: '/admin/users', page: 'users' },
+  { pattern: '/stock/storage-units/new', page: 'storageUnits' },
   { pattern: '/stock/storage-units/:storageUnitId', page: 'storageUnits' },
   { pattern: '/stock/storage-units', page: 'storageUnits' },
   { pattern: '/stock/transfer', page: 'stockTransfer' },
@@ -17,6 +19,7 @@ const rules: { pattern: string; page: PageKey }[] = [
   { pattern: '/purchases', page: 'purchases' },
   { pattern: '/master-data/suppliers/new', page: 'suppliers' },
   { pattern: '/master-data/suppliers', page: 'suppliers' },
+  { pattern: '/products/new', page: 'products' },
   { pattern: '/products/:productId/reports', page: 'products' },
   { pattern: '/products/:productId/history', page: 'products' },
   { pattern: '/products/:productId/stock', page: 'products' },

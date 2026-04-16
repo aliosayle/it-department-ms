@@ -13,7 +13,9 @@ import {
   insertCompany,
   insertPersonnel,
   insertPortalUser,
+  insertProduct,
   insertSite,
+  insertStorageUnit,
   insertSupplier,
   replaceUserPermissions,
 } from './masterDataWrites.js'
@@ -269,6 +271,42 @@ export async function buildApp() {
           address: String(b.address ?? ''),
           notes: String(b.notes ?? ''),
         })
+      })
+
+      r.post('/products', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'products', 'create')
+        const b = req.body as Record<string, string | undefined>
+        try {
+          return await insertProduct(pool, {
+            sku: String(b.sku ?? ''),
+            name: String(b.name ?? ''),
+            brand: String(b.brand ?? ''),
+            category: String(b.category ?? ''),
+            description: String(b.description ?? ''),
+          })
+        } catch (e) {
+          const err = e as Error & { statusCode?: number }
+          const code = err.statusCode === 409 ? 409 : 400
+          return reply.code(code).send({ error: code === 409 ? 'conflict' : 'bad_request', message: err.message })
+        }
+      })
+
+      r.post('/storage-units', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'storageUnits', 'create')
+        const b = req.body as Record<string, string | undefined>
+        try {
+          return await insertStorageUnit(pool, {
+            siteId: String(b.siteId ?? ''),
+            code: String(b.code ?? ''),
+            label: String(b.label ?? ''),
+            kind: String(b.kind ?? 'shelf'),
+            personnelId: b.personnelId != null && b.personnelId !== '' ? String(b.personnelId) : null,
+          })
+        } catch (e) {
+          const err = e as Error & { statusCode?: number }
+          const code = err.statusCode === 409 ? 409 : 400
+          return reply.code(code).send({ error: code === 409 ? 'conflict' : 'bad_request', message: err.message })
+        }
       })
 
       r.post('/users', { preHandler: requireAuth }, async (req, reply) => {

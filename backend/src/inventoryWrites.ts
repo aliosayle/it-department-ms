@@ -125,16 +125,26 @@ export async function transferStockTx(pool: Pool, input: TransferInput): Promise
       await conn.rollback()
       return { ok: false, error: 'Source and destination storage are the same.' }
     }
-    const [[destSu]] = await conn.query<RowDataPacket[]>('SELECT id, code, label FROM storage_units WHERE id = ?', [
-      input.toStorageUnitId,
-    ])
+    const [[destSu]] = await conn.query<RowDataPacket[]>(
+      'SELECT id, code, label, site_id AS siteId FROM storage_units WHERE id = ?',
+      [input.toStorageUnitId],
+    )
     if (!destSu) {
       await conn.rollback()
       return { ok: false, error: 'Destination storage unit not found.' }
     }
-    const [[fromSu]] = await conn.query<RowDataPacket[]>('SELECT code, label FROM storage_units WHERE id = ?', [
-      fromPos.storageUnitId,
-    ])
+    const [[fromSu]] = await conn.query<RowDataPacket[]>(
+      'SELECT code, label, site_id AS siteId FROM storage_units WHERE id = ?',
+      [fromPos.storageUnitId],
+    )
+    if (!fromSu) {
+      await conn.rollback()
+      return { ok: false, error: 'Source storage unit not found.' }
+    }
+    if (String(fromSu.siteId) !== String(destSu.siteId)) {
+      await conn.rollback()
+      return { ok: false, error: 'Source and destination storage must be at the same site.' }
+    }
     const fromLabel = fromSu ? fmtLabel(String(fromSu.code), String(fromSu.label)) : '—'
     const toLabel = fmtLabel(String(destSu.code), String(destSu.label))
     const productId = String(fromPos.productId)

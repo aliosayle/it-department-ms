@@ -40,8 +40,19 @@ export function StockListPage() {
     <>
       <div className="list-toolbar">
         <p className="form-page__hint" style={{ margin: 0 }}>
-          Totals across all storage units. Click a row for per-storage breakdown on the product.
+          Totals across all storage units. Click a row for per-storage breakdown on the product. Set up{' '}
+          <strong>products</strong> and <strong>storage units</strong> before receiving or purchasing.
         </p>
+        {products.create ? (
+          <Link to="/products/new">
+            <Button text="New product" />
+          </Link>
+        ) : null}
+        {storages.create ? (
+          <Link to="/stock/storage-units/new">
+            <Button text="New storage unit" />
+          </Link>
+        ) : null}
         {receive.create ? (
           <Link to="/stock/receive">
             <Button text="Receive stock" type="default" stylingMode="contained" />

@@ -1,4 +1,7 @@
+import { Link } from 'react-router-dom'
+import { useAuth } from '@/auth/AuthContext'
 import { dashboardMock } from '@/mocks'
+import { useMockStore } from '@/mocks/mockStore'
 import './DashboardPage.css'
 
 const timeFmt = new Intl.DateTimeFormat(undefined, {
@@ -8,9 +11,64 @@ const timeFmt = new Intl.DateTimeFormat(undefined, {
 
 export function DashboardPage() {
   const { kpis, recentActivity } = dashboardMock
+  const { companies, sites, personnel, suppliers, products, storageUnits } = useMockStore()
+  const { can } = useAuth()
+
+  const showSetup =
+    companies.length === 0 ||
+    sites.length === 0 ||
+    personnel.length === 0 ||
+    suppliers.length === 0 ||
+    products.length === 0 ||
+    storageUnits.length === 0
 
   return (
     <div className="dashboard">
+      {showSetup ? (
+        <section className="dashboard__setup" aria-label="Getting started" style={{ marginBottom: '1.5rem' }}>
+          <h2 className="dashboard__section-title">Getting started</h2>
+          <p className="dashboard__empty" style={{ marginBottom: '0.75rem' }}>
+            Use this order so purchases, receives, and transfers validate correctly:
+          </p>
+          <ol style={{ margin: 0, paddingLeft: '1.25rem', lineHeight: 1.6 }}>
+            {companies.length === 0 && can('companies', 'create') ? (
+              <li>
+                <Link to="/master-data/companies/new">Add a company</Link>
+              </li>
+            ) : null}
+            {sites.length === 0 && can('sites', 'create') ? (
+              <li>
+                <Link to="/master-data/sites/new">Add a site</Link> (needs a company)
+              </li>
+            ) : null}
+            {personnel.length === 0 && can('personnel', 'create') ? (
+              <li>
+                <Link to="/master-data/personnel/new">Add personnel</Link> (needs company + site)
+              </li>
+            ) : null}
+            {suppliers.length === 0 && can('suppliers', 'create') ? (
+              <li>
+                <Link to="/master-data/suppliers/new">Add a supplier</Link>
+              </li>
+            ) : null}
+            {products.length === 0 && can('products', 'create') ? (
+              <li>
+                <Link to="/products/new">Add products</Link> (unique SKU per item)
+              </li>
+            ) : null}
+            {storageUnits.length === 0 && can('storageUnits', 'create') ? (
+              <li>
+                <Link to="/stock/storage-units/new">Add storage units</Link> (bins per site; use custody for person
+                bins)
+              </li>
+            ) : null}
+            <li>
+              Then <Link to="/stock/receive">receive stock</Link> or <Link to="/purchases/new">create a purchase</Link>
+              .
+            </li>
+          </ol>
+        </section>
+      ) : null}
       <section className="dashboard__kpis" aria-label="Key metrics">
         {kpis.map((k) => (
           <article key={k.id} className="kpi-card">

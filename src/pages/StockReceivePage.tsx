@@ -36,6 +36,8 @@ export function StockReceivePage() {
     [storageUnits],
   )
 
+  const masterDataReady = products.length > 0 && storageUnits.length > 0
+
   const submit = async () => {
     setError(null)
     if (!perm.create) {
@@ -70,6 +72,12 @@ export function StockReceivePage() {
         <Link to="/purchases">Purchases</Link> to receive lines so movements stay tied to the order.{' '}
         <Link to="/master-data/suppliers">Suppliers</Link>.
       </p>
+      {!masterDataReady ? (
+        <p className="form-page__hint form-page__hint--warn">
+          Add at least one product and one storage unit before receiving.{' '}
+          <Link to="/products/new">New product</Link> · <Link to="/stock/storage-units/new">New storage unit</Link>
+        </p>
+      ) : null}
       <p className="form-page__section" style={{ marginTop: '0.5rem' }}>
         Product and location
       </p>
@@ -80,6 +88,7 @@ export function StockReceivePage() {
         valueExpr="value"
         value={productId}
         searchEnabled
+        disabled={!masterDataReady}
         onValueChanged={(e) => setProductId(e.value as string | null)}
       />
       <SelectBox
@@ -89,6 +98,7 @@ export function StockReceivePage() {
         valueExpr="value"
         value={storageUnitId}
         searchEnabled
+        disabled={!masterDataReady}
         onValueChanged={(e) => setStorageUnitId(e.value as string | null)}
       />
       <NumberBox
@@ -123,7 +133,7 @@ export function StockReceivePage() {
           text="Save"
           type="default"
           stylingMode="contained"
-          disabled={!perm.create}
+          disabled={!perm.create || !masterDataReady}
           onClick={submit}
         />
         <Button text="Cancel" onClick={() => navigate('/stock')} />

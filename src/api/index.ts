@@ -13,4 +13,6 @@ export {
   portalAddSite,
   portalAddPersonnel,
   portalAddSupplier,
+  portalAddProduct,
+  portalAddStorageUnit,
 } from '@/api/mutations'

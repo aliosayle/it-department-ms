@@ -39,7 +39,8 @@ export function PurchasesListPage() {
           Each purchase has a <strong>bon</strong> (delivery note), supplier, who issued it internally, and
           lines that post into stock when received.{' '}
           <Link to="/master-data/suppliers">Suppliers</Link> ·{' '}
-          <Link to="/products">Products</Link> · <Link to="/stock">Stock</Link>
+          <Link to="/products">Products</Link> · <Link to="/stock/storage-units">Storage units</Link> ·{' '}
+          <Link to="/stock">Stock</Link>
         </p>
         {perm.create ? (
           <Link to="/purchases/new">

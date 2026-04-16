@@ -140,16 +140,26 @@ JWT_SECRET="$(openssl rand -hex 32)"
 pw_esc="$(sql_quote_literal "$DB_APP_PASSWORD")"
 
 # --- Remove old API orchestration -------------------------------------------
+# Never delete with npx pm2 then start with global pm2 (two different PM2 daemons).
 log "Stopping PM2 apps (if any)…"
-PM2_CMD=(npx --yes pm2)
-if command -v pm2 >/dev/null 2>&1; then PM2_CMD=(pm2)
-elif [[ "$SKIP_PM2_INSTALL" != "1" ]]; then
-  log "Installing pm2 globally…"
-  npm install -g pm2
-  PM2_CMD=(pm2)
+if ! command -v pm2 >/dev/null 2>&1; then
+  if [[ "$SKIP_PM2_INSTALL" != "1" ]]; then
+    log "Installing pm2 globally (same binary for delete + start)…"
+    npm install -g pm2
+  fi
 fi
-"${PM2_CMD[@]}" delete it-department-api 2>/dev/null || true
-"${PM2_CMD[@]}" delete it-department-spa 2>/dev/null || true
+if command -v pm2 >/dev/null 2>&1; then
+  PM2_CMD=(pm2)
+else
+  PM2_CMD=(npx --yes pm2)
+fi
+# Clear both daemons in case an old run mixed npx vs global.
+npx --yes pm2 delete it-department-api 2>/dev/null || true
+npx --yes pm2 delete it-department-spa 2>/dev/null || true
+command -v pm2 >/dev/null 2>&1 && {
+  pm2 delete it-department-api 2>/dev/null || true
+  pm2 delete it-department-spa 2>/dev/null || true
+}
 
 if [[ -f /etc/systemd/system/it-department-api.service ]]; then
   log "Removing systemd it-department-api.service…"
@@ -286,6 +296,7 @@ sudo systemctl restart nginx
 ECO="$REPO_ROOT/ecosystem.api-only.cjs"
 [[ -f "$ECO" ]] || die "missing ecosystem.api-only.cjs"
 log "Starting API with PM2…"
+"${PM2_CMD[@]}" delete it-department-api 2>/dev/null || true
 "${PM2_CMD[@]}" start "$ECO"
 
 ok=0

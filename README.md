@@ -1,13 +1,15 @@
 # IT Department Portal
 
-Internal operations portal scaffold: **Vite**, **React**, **TypeScript**, and **DevExtreme** (see [devextreme-template.md](./devextreme-template.md) for replication notes). Mock JSON drives the first UI slice until APIs are integrated.
+Internal operations portal: **Vite**, **React**, **TypeScript**, and **DevExtreme** (see [devextreme-template.md](./devextreme-template.md)). The UI is **locked behind JWT auth**: set **`VITE_API_BASE_URL`**, run the **backend** (`migrate` + `seed` with `SEED_SUPERADMIN_PASSWORD`), then sign in at **`/login`**. See [`.env.example`](./.env.example).
 
 ## Scripts
 
-- `npm run dev` — local dev server
+- `npm run dev` — local dev server (use `.env.example` → `.env.local` with `VITE_API_BASE_URL`; run **`backend`** on port 4000)
 - `npm run build` — production build
 - `npm run preview` — preview the production build
 - `npm run lint` — ESLint
+
+**Backend** (`backend/`): `npm run dev`, `npm run migrate`, `npm run seed` (requires `SEED_SUPERADMIN_PASSWORD`; creates one superadmin user only). **`scripts/setup-ubuntu.sh`** writes **`.credentials-portal.env`** with the first superadmin password when MariaDB is installed.
 
 ## DevExtreme licensing (evaluation vs production)
 

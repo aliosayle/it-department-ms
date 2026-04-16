@@ -17,17 +17,14 @@ import {
 } from '@/api/session'
 import type { CrudAction, PageKey, PortalUser } from '@/mocks/domain/types'
 import { useMockStore } from '@/mocks/mockStore'
-import { denyAllPermissions, fullPermissionsMap } from '@/auth/pageKeys'
-
-const LS_MOCK_USER_ID = 'it-portal-current-user-id'
+import { denyAllPermissions } from '@/auth/pageKeys'
 
 type AuthContextValue = {
   user: PortalUser
   userId: string
-  setUserId: (id: string) => void
   users: PortalUser[]
   can: (page: PageKey, action: CrudAction) => boolean
-  /** False while live session loads `/me` (shell should wait). */
+  /** False until `GET /me` succeeds (JWT session). */
   sessionReady: boolean
   logout: () => void
 }
@@ -54,66 +51,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(PORTAL_AUTH_CHANGED_EVENT, onAuth)
   }, [])
 
+  useEffect(() => {
+    if (getAccessToken() && !isLiveApi()) clearSession()
+  }, [])
+
+  const hasToken = !!getAccessToken()
   const live = isLiveApi()
-  const hasToken = live && !!getAccessToken()
 
   const meQuery = useQuery({
     queryKey: ['me', authEpoch],
     queryFn: fetchCurrentUser,
-    enabled: hasToken,
+    enabled: hasToken && live,
     retry: false,
   })
 
   useEffect(() => {
-    if (!hasToken) return
+    if (!hasToken || !live) return
     if (!meQuery.isError) return
     clearSession()
     if (!window.location.pathname.startsWith('/login')) {
       window.location.assign('/login')
     }
-  }, [hasToken, meQuery.isError])
-
-  const [mockUserId, setMockUserId] = useState(() => localStorage.getItem(LS_MOCK_USER_ID) ?? 'u-ali')
-
-  const resolvedMockUserId = useMemo(() => {
-    if (live) return mockUserId
-    if (users.length === 0) return mockUserId
-    return users.some((u) => u.id === mockUserId) ? mockUserId : users[0]!.id
-  }, [live, users, mockUserId])
-
-  useEffect(() => {
-    if (live) return
-    localStorage.setItem(LS_MOCK_USER_ID, resolvedMockUserId)
-  }, [live, resolvedMockUserId])
+  }, [hasToken, live, meQuery.isError])
 
   const user = useMemo((): PortalUser => {
-    if (live) {
-      if (meQuery.data) return meQuery.data
-      return emptyUser()
-    }
-    const u = users.find((x) => x.id === resolvedMockUserId) ?? users[0]
-    if (!u) {
-      return {
-        id: '',
-        displayName: '—',
-        login: '',
-        permissions: fullPermissionsMap(),
-      }
-    }
-    return u
-  }, [live, users, resolvedMockUserId, meQuery.data])
+    if (!hasToken || !live) return emptyUser()
+    if (meQuery.data) return meQuery.data
+    return emptyUser()
+  }, [hasToken, live, meQuery.data])
 
-  const sessionReady = !live || !hasToken || meQuery.isSuccess
+  const sessionReady = !hasToken || (live && meQuery.isSuccess)
 
-  const setUserId = useCallback(
-    (id: string) => {
-      if (live) return
-      setMockUserId(id)
-    },
-    [live],
-  )
-
-  const userId = live ? user.id : resolvedMockUserId
+  const userId = user.id
 
   const can = useCallback(
     (page: PageKey, action: CrudAction) => {
@@ -131,13 +100,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       userId,
-      setUserId,
       users,
       can,
       sessionReady,
       logout,
     }),
-    [user, userId, users, can, sessionReady, logout, setUserId],
+    [user, userId, users, can, sessionReady, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

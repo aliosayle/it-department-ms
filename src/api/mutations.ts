@@ -1,6 +1,6 @@
 /**
- * Write operations: in-memory mock by default; when `VITE_API_BASE_URL` is set, POST to the REST API
- * described in `docs/api/REST.md`. Successful live calls reload the page until read paths use the same API.
+ * Write operations: POST/PATCH to the REST API when `VITE_API_BASE_URL` is set.
+ * The portal is locked behind API auth — configure the API URL to use mutations.
  */
 
 import { apiPatchJson, apiPostJson } from '@/api/http'
@@ -20,18 +20,8 @@ import type {
   TransferStockInput,
 } from '@/mocks/domain/types'
 import type { CreateDeliveryResult, CreatePurchaseResult, ReceivePurchaseResult } from '@/mocks/mockStore'
-import {
-  addCompany,
-  addPersonnel,
-  addSite,
-  addSupplier,
-  createDelivery,
-  createPurchase,
-  receivePurchase,
-  receiveStock,
-  transferStock,
-  updatePortalUser,
-} from '@/mocks/mockStore'
+
+const NEED_API = 'Set VITE_API_BASE_URL and sign in to use this action.'
 
 function mapLiveFailure(e: unknown): { ok: false; error: string } {
   if (isPortalApiError(e)) return { ok: false, error: e.message }
@@ -42,7 +32,7 @@ function mapLiveFailure(e: unknown): { ok: false; error: string } {
 export async function portalReceiveStock(
   input: ReceiveStockInput,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!isLiveApi()) return receiveStock(input)
+  if (!isLiveApi()) return { ok: false, error: NEED_API }
   try {
     await apiPostJson('/inventory/receive', input)
     void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
@@ -55,7 +45,7 @@ export async function portalReceiveStock(
 export async function portalTransferStock(
   input: TransferStockInput,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!isLiveApi()) return transferStock(input)
+  if (!isLiveApi()) return { ok: false, error: NEED_API }
   try {
     await apiPostJson('/inventory/transfer', input)
     void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
@@ -66,7 +56,7 @@ export async function portalTransferStock(
 }
 
 export async function portalCreateDelivery(input: CreateDeliveryInput): Promise<CreateDeliveryResult> {
-  if (!isLiveApi()) return createDelivery(input)
+  if (!isLiveApi()) return { ok: false, error: NEED_API }
   try {
     const delivery = await apiPostJson<Delivery>('/deliveries', input)
     if (!delivery?.id) return { ok: false, error: 'Invalid response from server.' }
@@ -78,7 +68,7 @@ export async function portalCreateDelivery(input: CreateDeliveryInput): Promise<
 }
 
 export async function portalCreatePurchase(input: CreatePurchaseInput): Promise<CreatePurchaseResult> {
-  if (!isLiveApi()) return createPurchase(input)
+  if (!isLiveApi()) return { ok: false, error: NEED_API }
   try {
     const purchase = await apiPostJson<Purchase>('/purchases', input)
     if (!purchase?.id) return { ok: false, error: 'Invalid response from server.' }
@@ -90,7 +80,7 @@ export async function portalCreatePurchase(input: CreatePurchaseInput): Promise<
 }
 
 export async function portalReceivePurchase(purchaseId: string): Promise<ReceivePurchaseResult> {
-  if (!isLiveApi()) return receivePurchase(purchaseId)
+  if (!isLiveApi()) return { ok: false, error: NEED_API }
   try {
     await apiPostJson(`/purchases/${encodeURIComponent(purchaseId)}/receive`, {})
     void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
@@ -104,7 +94,7 @@ export async function portalUpdatePortalUser(
   userId: string,
   permissions: Record<PageKey, PageCrud>,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!isLiveApi()) return updatePortalUser(userId, permissions)
+  if (!isLiveApi()) return { ok: false, error: NEED_API }
   try {
     await apiPatchJson(`/users/${encodeURIComponent(userId)}/permissions`, { permissions })
     void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
@@ -115,7 +105,7 @@ export async function portalUpdatePortalUser(
 }
 
 export async function portalAddCompany(name: string, notes = ''): Promise<Company> {
-  if (!isLiveApi()) return addCompany(name, notes)
+  if (!isLiveApi()) throw new Error(NEED_API)
   const row = await apiPostJson<Company>('/companies', { name, notes })
   if (!row?.id) throw new Error('Invalid response from server.')
   void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
@@ -127,7 +117,7 @@ export async function portalAddSite(
   name: string,
   location: string,
 ): Promise<{ ok: true; site: import('@/mocks/domain/types').Site } | { ok: false; error: string }> {
-  if (!isLiveApi()) return addSite(companyId, name, location)
+  if (!isLiveApi()) return { ok: false, error: NEED_API }
   try {
     const site = await apiPostJson<import('@/mocks/domain/types').Site>('/sites', { companyId, name, location })
     if (!site?.id) return { ok: false, error: 'Invalid response from server.' }
@@ -146,7 +136,7 @@ export async function portalAddPersonnel(
 ): Promise<
   { ok: true; personnel: import('@/mocks/domain/types').Personnel } | { ok: false; error: string }
 > {
-  if (!isLiveApi()) return addPersonnel(fullName, email, companyId, siteId)
+  if (!isLiveApi()) return { ok: false, error: NEED_API }
   try {
     const personnel = await apiPostJson<import('@/mocks/domain/types').Personnel>('/personnel', {
       fullName,
@@ -170,7 +160,7 @@ export async function portalAddSupplier(
   address: string,
   notes: string,
 ): Promise<Supplier> {
-  if (!isLiveApi()) return addSupplier(name, contactName, email, phone, address, notes)
+  if (!isLiveApi()) throw new Error(NEED_API)
   const row = await apiPostJson<Supplier>('/suppliers', {
     name,
     contactName,

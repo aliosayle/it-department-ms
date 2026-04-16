@@ -14,6 +14,7 @@ dist-ssr
 
 # Local secrets (MariaDB bootstrap from scripts/setup-ubuntu.sh)
 .credentials-mariadb.env
+.credentials-portal.env
 
 # Editor directories and files
 .vscode/*

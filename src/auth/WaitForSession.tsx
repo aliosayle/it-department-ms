@@ -1,7 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 
-/** When using the live API, blocks the shell until `GET /me` succeeds so RBAC is accurate. */
+/** Blocks the shell until `GET /me` succeeds so RBAC matches the JWT. */
 export function WaitForSession() {
   const { sessionReady } = useAuth()
   if (!sessionReady) {

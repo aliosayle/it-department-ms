@@ -2,20 +2,24 @@
 
 This matches the v1 plan: **nginx** serves the Vite build and proxies **`/api/`** to the Node API; **MariaDB** holds data; **JWT** auth is enforced when the SPA is built with `VITE_API_BASE_URL` pointing at that API.
 
-## 1. Database
+## 1. Database and portal bootstrap user
 
-Use `scripts/setup-ubuntu.sh` with `INSTALL_MARIADB=1` (default) to create the database and write `.credentials-mariadb.env`.
+`scripts/setup-ubuntu.sh` with **`INSTALL_MARIADB=1`** (default) will:
 
-Apply schema and seed from the repo (on the server, after cloning):
+1. Create the MariaDB database and app user, apply `docs/database/schema-mariadb.sql`, and write **`.credentials-mariadb.env`**.
+2. If **`backend/package.json`** exists: write **`backend/.env`**, run **`npm run migrate`** and **`npm run seed`**, and write **`.credentials-portal.env`** with **`PORTAL_SUPERADMIN_LOGIN`** / **`PORTAL_SUPERADMIN_PASSWORD`** (password random unless you set **`SUPERADMIN_PASSWORD`** before running the script).
+
+The seed creates **only** one portal user (full access; no demo companies or stock). Sign in at **`/login`** with that login.
+
+Manual seed (without the full Ubuntu script):
 
 ```bash
-cd /opt/it-department   # or your deploy path
-cd backend
+cd /opt/it-department/backend
 cp .env.example .env
-# Edit .env: DATABASE_* from .credentials-mariadb.env, JWT_SECRET, CORS_ORIGIN=https://your-host
+# Edit .env: DATABASE_*, JWT_SECRET, CORS_ORIGIN
 npm ci
 npm run migrate
-npm run seed
+SEED_SUPERADMIN_LOGIN=superadmin SEED_SUPERADMIN_PASSWORD='your-secure-password' npm run seed
 ```
 
 ## 2. API (systemd)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import Button from 'devextreme-react/button'
 import TextBox from 'devextreme-react/text-box'
 import { isLiveApi } from '@/api/config'
@@ -22,7 +22,20 @@ export function LoginPage() {
   }, [from, navigate])
 
   if (!isLiveApi()) {
-    return <Navigate to="/" replace />
+    return (
+      <div className="form-page" style={{ maxWidth: 520, margin: '8vh auto' }}>
+        <h1 style={{ marginTop: 0 }}>IT Portal</h1>
+        <p className="form-page__hint">
+          Sign-in requires the REST API. Set <code>VITE_API_BASE_URL</code> in your environment (for example{' '}
+          <code>/api/v1</code> with the Vite dev proxy, or the full URL to your API), then reload this page.
+        </p>
+        <p className="form-page__hint">
+          After the database is seeded, use the superadmin account created by <code>scripts/setup-ubuntu.sh</code> (see{' '}
+          <code>.credentials-portal.env</code> on the server) or run <code>npm run seed</code> in <code>backend/</code> with{' '}
+          <code>SEED_SUPERADMIN_PASSWORD</code>.
+        </p>
+      </div>
+    )
   }
 
   const submit = async () => {

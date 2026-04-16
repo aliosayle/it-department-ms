@@ -5,8 +5,9 @@ const base = `http://127.0.0.1:${config.port}`
 async function main() {
   const h = await fetch(`${base}/health`)
   if (!h.ok) throw new Error(`health ${h.status}`)
-  const login = process.env.SMOKE_LOGIN ?? 'ali.osseili'
-  const password = process.env.SMOKE_PASSWORD ?? 'changeme'
+  const login = process.env.SMOKE_LOGIN ?? 'superadmin'
+  const password = process.env.SMOKE_PASSWORD
+  if (!password) throw new Error('Set SMOKE_PASSWORD (same as SEED_SUPERADMIN_PASSWORD / .credentials-portal.env)')
   const lr = await fetch(`${base}/api/v1/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

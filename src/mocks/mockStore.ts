@@ -1,19 +1,3 @@
-import companiesSeed from '@/mocks/companies.seed.json'
-import deliveriesSeed from '@/mocks/deliveries.seed.json'
-import networkDevicesSeed from '@/mocks/networkDevices.seed.json'
-import personnelSeed from '@/mocks/personnel.seed.json'
-import purchaseLinesSeed from '@/mocks/purchaseLines.seed.json'
-import purchasesSeed from '@/mocks/purchases.seed.json'
-import productMovementsSeed from '@/mocks/productMovements.seed.json'
-import productReportsSeed from '@/mocks/productReports.seed.json'
-import productsSeed from '@/mocks/products.seed.json'
-import sitesSeed from '@/mocks/sites.seed.json'
-import stockPositionsSeed from '@/mocks/stockPositions.seed.json'
-import storageUnitsSeed from '@/mocks/storageUnits.seed.json'
-import suppliersSeed from '@/mocks/suppliers.seed.json'
-import userEquipmentSeed from '@/mocks/userEquipment.seed.json'
-import usersSeed from '@/mocks/users.seed.json'
-import { fullPermissionsMap, mergeFromPartial } from '@/auth/pageKeys'
 import type {
   Company,
   CreateDeliveryInput,
@@ -62,25 +46,6 @@ export type StoreState = {
   purchaseLines: PurchaseLine[]
 }
 
-type UserSeedRow = {
-  id: string
-  displayName: string
-  login: string
-  permissions?: Partial<Record<PageKey, PageCrud>>
-}
-
-function normalizePortalUsers(raw: UserSeedRow[]): PortalUser[] {
-  return raw.map((r) => ({
-    id: r.id,
-    displayName: r.displayName,
-    login: r.login,
-    permissions:
-      !r.permissions || Object.keys(r.permissions).length === 0
-        ? fullPermissionsMap()
-        : mergeFromPartial(r.permissions),
-  }))
-}
-
 export function formatStorageUnitLabel(u: StorageUnit | undefined): string {
   if (!u) return '—'
   return `${u.code} (${u.label})`
@@ -90,27 +55,28 @@ function stripZeroStockPositions(rows: StockPosition[]): StockPosition[] {
   return rows.filter((p) => p.quantity > 0)
 }
 
-function cloneSeeds(): StoreState {
+/** Empty in-memory store; signed-in API bootstrap supplies real data. */
+function emptyStore(): StoreState {
   return {
-    companies: [...(companiesSeed as Company[])],
-    sites: [...(sitesSeed as Site[])],
-    personnel: [...(personnelSeed as Personnel[])],
-    storageUnits: [...(storageUnitsSeed as StorageUnit[])],
-    products: [...(productsSeed as Product[])],
-    stockPositions: [...(stockPositionsSeed as StockPosition[])],
-    productMovements: [...(productMovementsSeed as ProductMovement[])],
-    productReports: [...(productReportsSeed as ProductReportRow[])],
-    deliveries: [...(deliveriesSeed as Delivery[])],
-    userEquipment: [...(userEquipmentSeed as UserEquipment[])],
-    networkDevices: [...(networkDevicesSeed as NetworkDevice[])],
-    users: normalizePortalUsers(usersSeed as UserSeedRow[]),
-    suppliers: [...(suppliersSeed as Supplier[])],
-    purchases: [...(purchasesSeed as Purchase[])],
-    purchaseLines: [...(purchaseLinesSeed as PurchaseLine[])],
+    companies: [],
+    sites: [],
+    personnel: [],
+    storageUnits: [],
+    products: [],
+    stockPositions: [],
+    productMovements: [],
+    productReports: [],
+    deliveries: [],
+    userEquipment: [],
+    networkDevices: [],
+    users: [],
+    suppliers: [],
+    purchases: [],
+    purchaseLines: [],
   }
 }
 
-let memState: StoreState = cloneSeeds()
+let memState: StoreState = emptyStore()
 /** When API mode loads bootstrap JSON, reads use this snapshot until the next refetch. */
 let liveSnapshot: StoreState | null = null
 
@@ -878,7 +844,7 @@ export function getStorageUnitsForProduct(productId: string) {
 
 /** Dev / tests: reset in-memory state to seeds. */
 export function resetMockStore() {
-  memState = cloneSeeds()
+  memState = emptyStore()
   liveSnapshot = null
   emit()
 }

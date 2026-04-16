@@ -1,0 +1,23 @@
+/**
+ * Grid list pages: spacing and grid chrome — edit this file to change margins
+ * or default grid height for all portal DataGrids.
+ */
+.portal-grid-page-shell {
+  /* Pull flush to the shell content box (undoes --shell-content-padding-*). */
+  margin: calc(-1 * var(--shell-content-padding-y))
+    calc(-1 * var(--shell-content-padding-x));
+  padding: var(--portal-grid-shell-padding-y) var(--portal-grid-shell-padding-x);
+  width: calc(100% + 2 * var(--shell-content-padding-x));
+  max-width: calc(100% + 2 * var(--shell-content-padding-x));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 360px;
+  flex: 1;
+}
+
+.portal-grid-page-shell .portal-grid {
+  flex: 1;
+  min-height: min(70vh, 720px);
+}

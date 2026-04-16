@@ -1,0 +1,32 @@
+[
+  {
+    "id": "del-seed-1",
+    "source": "stock",
+    "stockPositionId": "pos-1",
+    "quantity": 1,
+    "itemReceivedDate": null,
+    "itemDescription": "Business laptop 14\"",
+    "deliveredTo": "Haj Abed <haj.abed@astra.local>",
+    "site": "Av 24 — Avenue 24, Tunis",
+    "dateDelivered": "2026-04-05",
+    "description": "Demo issue to custody",
+    "companyId": "co-1",
+    "siteId": "site-1",
+    "personnelId": "per-1"
+  },
+  {
+    "id": "del-001",
+    "source": "external",
+    "stockPositionId": null,
+    "quantity": 2,
+    "itemReceivedDate": "2026-04-10",
+    "itemDescription": "Thunderbolt docks — HP",
+    "deliveredTo": "Haj Abed <haj.abed@astra.local>",
+    "site": "Av 24 — Avenue 24, Tunis",
+    "dateDelivered": "2026-04-12",
+    "description": "Signed handover at Av 24",
+    "companyId": "co-1",
+    "siteId": "site-1",
+    "personnelId": "per-1"
+  }
+]

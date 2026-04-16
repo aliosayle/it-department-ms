@@ -1,0 +1,41 @@
+[
+  {
+    "id": "eq-001",
+    "name": "Haj Abed",
+    "department": "IT — Astra",
+    "formFactor": "Laptop",
+    "brand": "Lenovo ThinkPad",
+    "osInstalled": "Windows 11 Enterprise",
+    "specs": "16 GB RAM, 512 GB SSD, Intel i5",
+    "ipAddresses": "10.20.1.45",
+    "macAddress": "54:EE:75:AA:12:90",
+    "screenAccessories": "24\" Dell P2422H",
+    "printerScannerOther": "Floor MFP, USB headset"
+  },
+  {
+    "id": "eq-002",
+    "name": "Firas Khrissi",
+    "department": "Operations — Afrifood",
+    "formFactor": "Laptop",
+    "brand": "HP ProBook",
+    "osInstalled": "Windows 11 Pro",
+    "specs": "32 GB RAM, 1 TB SSD",
+    "ipAddresses": "10.30.8.112",
+    "macAddress": "B8:94:26:CC:11:22",
+    "screenAccessories": "27\" + USB-C hub",
+    "printerScannerOther": "Label printer, barcode scanner"
+  },
+  {
+    "id": "eq-003",
+    "name": "Hassan Jammal",
+    "department": "Finance — IBA",
+    "formFactor": "Desktop",
+    "brand": "Dell OptiPlex",
+    "osInstalled": "Windows 11 Pro",
+    "specs": "16 GB RAM, 512 GB SSD",
+    "ipAddresses": "10.40.3.77",
+    "macAddress": "A4:C3:F0:9B:44:01",
+    "screenAccessories": "Dual 24\"",
+    "printerScannerOther": "Department MFP"
+  }
+]

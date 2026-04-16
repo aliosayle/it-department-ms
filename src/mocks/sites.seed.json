@@ -1,0 +1,20 @@
+[
+  {
+    "id": "site-1",
+    "companyId": "co-1",
+    "name": "Av 24",
+    "location": "Avenue 24, Tunis"
+  },
+  {
+    "id": "site-2",
+    "companyId": "co-2",
+    "name": "Futur Tower",
+    "location": "Business district"
+  },
+  {
+    "id": "site-3",
+    "companyId": "co-3",
+    "name": "Kinshasa Mall",
+    "location": "Kinshasa, DRC"
+  }
+]

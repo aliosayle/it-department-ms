@@ -1,0 +1,29 @@
+[
+  {
+    "id": "net-001",
+    "type": "Switch",
+    "details": "48p PoE+, core VLAN trunk",
+    "brand": "Cisco",
+    "model": "C9300-48P",
+    "serialNumber": "FCW2345A1BC",
+    "location": "DC-East / Rack 12"
+  },
+  {
+    "id": "net-002",
+    "type": "Router",
+    "details": "WAN edge, dual ISP",
+    "brand": "Fortinet",
+    "model": "FortiGate 200F",
+    "serialNumber": "FG200F123456",
+    "location": "DC-West / Network room"
+  },
+  {
+    "id": "net-003",
+    "type": "Access point",
+    "details": "Wi-Fi 6, Building C fl3",
+    "brand": "Aruba",
+    "model": "AP-635",
+    "serialNumber": "CNBLKB03YZ",
+    "location": "HQ — Building C"
+  }
+]

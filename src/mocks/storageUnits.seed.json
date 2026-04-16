@@ -1,0 +1,68 @@
+[
+  {
+    "id": "su-1",
+    "siteId": "site-1",
+    "code": "AV24-IT-A",
+    "label": "IT store — Av 24",
+    "kind": "shelf"
+  },
+  {
+    "id": "su-1b",
+    "siteId": "site-1",
+    "code": "AV24-MEZZ",
+    "label": "Av 24 — mezzanine overflow",
+    "kind": "bin"
+  },
+  {
+    "id": "su-maktab-hk",
+    "siteId": "site-1",
+    "code": "MAK-HK",
+    "label": "Maktab Haj Khatoun",
+    "kind": "office"
+  },
+  {
+    "id": "su-2",
+    "siteId": "site-2",
+    "code": "FT-STOR-01",
+    "label": "Futur Tower — stock room",
+    "kind": "zone"
+  },
+  {
+    "id": "su-block-s",
+    "siteId": "site-2",
+    "code": "BLK-S",
+    "label": "Block S",
+    "kind": "block"
+  },
+  {
+    "id": "su-3",
+    "siteId": "site-3",
+    "code": "KM-MALL-B12",
+    "label": "Kinshasa Mall — back office bin",
+    "kind": "bin"
+  },
+  {
+    "id": "su-c-per-1",
+    "siteId": "site-1",
+    "code": "ISSUED-HAJ",
+    "label": "Issued — Haj Abed",
+    "kind": "custody",
+    "personnelId": "per-1"
+  },
+  {
+    "id": "su-c-per-2",
+    "siteId": "site-2",
+    "code": "ISSUED-FIRAS",
+    "label": "Issued — Firas Khrissi",
+    "kind": "custody",
+    "personnelId": "per-2"
+  },
+  {
+    "id": "su-c-per-3",
+    "siteId": "site-3",
+    "code": "ISSUED-HASSAN",
+    "label": "Issued — Hassan Jammal",
+    "kind": "custody",
+    "personnelId": "per-3"
+  }
+]

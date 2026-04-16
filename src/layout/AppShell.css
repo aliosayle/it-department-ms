@@ -1,0 +1,219 @@
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+.app-shell--collapsed .app-shell__sidebar {
+  width: var(--sidebar-collapsed-width);
+}
+
+.app-shell__sidebar {
+  width: var(--sidebar-width);
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 0.2s ease;
+}
+
+.app-shell__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: var(--sidebar-padding-y) var(--sidebar-padding-x);
+  padding-bottom: calc(var(--sidebar-padding-y) + 0.1rem);
+  border-bottom: 1px solid var(--color-border);
+  min-height: var(--topbar-height);
+  box-sizing: border-box;
+}
+
+.app-shell__brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--color-accent), #063a73);
+  flex-shrink: 0;
+}
+
+.app-shell__brand-text {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  letter-spacing: -0.02em;
+}
+
+.app-shell__nav {
+  display: flex;
+  flex-direction: column;
+  padding: var(--sidebar-padding-y) var(--sidebar-padding-x);
+  gap: 0.15rem;
+  flex: 1;
+}
+
+.app-shell__link {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: var(--sidebar-link-padding-y) var(--sidebar-link-padding-x);
+  border-radius: 6px;
+  color: var(--color-text);
+  text-decoration: none;
+  font-size: 0.9375rem;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.app-shell__link:hover {
+  background: var(--color-accent-muted);
+  color: var(--color-accent);
+}
+
+.app-shell__link.active {
+  background: var(--color-accent-muted);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.app-shell__link-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  flex-shrink: 0;
+}
+
+.app-shell__link-icon .nav-icon {
+  display: block;
+  opacity: 0.92;
+}
+
+.app-shell__collapse {
+  margin: var(--sidebar-padding-y) var(--sidebar-padding-x);
+  padding: 0.35rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.app-shell__collapse:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.app-shell__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.app-shell__topbar {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.app-shell__topbar-inner {
+  max-width: var(--content-max);
+  margin: 0;
+  padding: 0.65rem var(--shell-content-padding-x);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.app-shell__title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.app-shell__subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.app-shell__topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.app-shell__user-select {
+  flex-shrink: 0;
+}
+
+.app-shell__badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  background: #fff8e6;
+  color: #8a5b00;
+  border: 1px solid #f0e0b2;
+}
+
+.app-shell__user {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg);
+}
+
+.app-shell__content {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.app-shell__content-inner {
+  max-width: var(--content-max);
+  margin: 0;
+  padding: var(--shell-content-padding-y) var(--shell-content-padding-x);
+  width: 100%;
+  box-sizing: border-box;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .app-shell__sidebar {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .app-shell__nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    flex: 1;
+  }
+
+  .app-shell--collapsed .app-shell__sidebar {
+    width: 100%;
+  }
+}

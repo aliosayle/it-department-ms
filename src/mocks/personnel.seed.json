@@ -1,0 +1,23 @@
+[
+  {
+    "id": "per-1",
+    "fullName": "Haj Abed",
+    "email": "haj.abed@astra.local",
+    "companyId": "co-1",
+    "siteId": "site-1"
+  },
+  {
+    "id": "per-2",
+    "fullName": "Firas Khrissi",
+    "email": "firas.khrissi@afrifood.local",
+    "companyId": "co-2",
+    "siteId": "site-2"
+  },
+  {
+    "id": "per-3",
+    "fullName": "Hassan Jammal",
+    "email": "hassan.jammal@iba.local",
+    "companyId": "co-3",
+    "siteId": "site-3"
+  }
+]

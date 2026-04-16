@@ -66,6 +66,40 @@ npm run build
 
 Deploy `dist/` to the nginx web root (the Ubuntu script copies it to `WEB_ROOT`).
 
+### Alternative: point nginx `root` at `dist/` in the clone
+
+On a single machine where you build in place, you can set **`root`** to the **absolute** path of **`…/it-department-ms/dist`** instead of `/var/www/...`. Then **`npm run build`** updates what nginx serves with **no rsync and no reload** (static files are read from disk on each request).
+
+1. Edit your site file under **`/etc/nginx/sites-available/`** (same `location /` / `try_files` pattern as the install scripts: SPA fallback **`try_files $uri $uri/ /index.html;`**, and a **`location /api/`** proxy to the API).
+2. Set for example:
+
+   ```nginx
+   root /home/it-glpi/it-department-ms/dist;
+   ```
+
+3. Ensure **nginx can traverse the path**: every directory from `/` down to **`dist`** must be executable (`chmod o+x` or group `www-data`) and files under **`dist`** readable. Typical fix:
+
+   ```bash
+   chmod o+x /home/it-glpi /home/it-glpi/it-department-ms
+   # or: sudo usermod -aG it-glpi www-data && newgrp  # if you prefer group access
+   ```
+
+4. **`sudo nginx -t && sudo systemctl reload nginx`**
+
+Tradeoffs: the web server user can read everything nginx is allowed to follow under that path (keep permissions tight); moving the clone path requires editing nginx again. A dedicated **`WEB_ROOT`** under `/var/www` avoids exposing home-directory layout.
+
+### Optional: auto-sync `dist/` when files change
+
+Nginx does not need a restart for normal static file updates once the files on disk are updated. Production flow is still **`./scripts/update-pm2-app.sh`** after `git pull`. If you often rebuild locally on the server and want **`dist/`** mirrored to **`WEB_ROOT`** automatically, use inotify:
+
+```bash
+chmod +x scripts/watch-dist-sync-nginx.sh
+export WEB_ROOT=/var/www/it-department-portal   # same as nginx root for the SPA
+./scripts/watch-dist-sync-nginx.sh
+```
+
+Run **`npm run build`** (or a watch build) in another terminal; the script **rsyncs** `dist/` → `WEB_ROOT` and runs **`systemctl reload nginx`** after a short debounce. Install **`inotify-tools`** first (`sudo apt install inotify-tools`).
+
 ## 4. nginx
 
 `scripts/setup-ubuntu.sh` writes a site that includes **`location /api/`** → **`http://127.0.0.1:4000`**. Ensure nothing else binds port **4000** except the API, or change both the unit’s implied port and nginx `proxy_pass`.

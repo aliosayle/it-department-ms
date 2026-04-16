@@ -1,8 +1,10 @@
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { RowClickEvent } from 'devextreme/ui/data_grid'
 import { Link } from 'react-router-dom'
 import Button from 'devextreme-react/button'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
+import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { useCan } from '@/auth/AuthContext'
 import { purchasesGridConfig } from '@/pages/gridPageConfigs.stockDomain'
 import type { PurchaseListRow } from '@/mocks/domain/types'
@@ -19,6 +21,17 @@ export function PurchasesListPage() {
     if (id) navigate(`/purchases/${String(id)}`)
   }
 
+  const rowActions = useMemo<PortalGridRowActions<PurchaseListRow>>(
+    () => ({
+      canView: perm.view,
+      canEdit: perm.edit,
+      canDelete: perm.delete,
+      getViewHref: (r) => `/purchases/${String(r.id)}`,
+      getEditHref: (r) => `/purchases/${String(r.id)}`,
+    }),
+    [perm.view, perm.edit, perm.delete],
+  )
+
   return (
     <>
       <div className="list-toolbar">
@@ -34,7 +47,12 @@ export function PurchasesListPage() {
           </Link>
         ) : null}
       </div>
-      <PortalGridPage config={purchasesGridConfig} dataSource={rows} onRowClick={onRowClick} />
+      <PortalGridPage
+        config={purchasesGridConfig}
+        dataSource={rows}
+        onRowClick={onRowClick}
+        rowActions={rowActions}
+      />
     </>
   )
 }

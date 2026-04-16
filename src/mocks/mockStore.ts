@@ -481,6 +481,7 @@ export function buildStockOverview(): StockOverviewRow[] {
     const company = site ? active().companies.find((c) => c.id === site.companyId) : undefined
     return {
       id: pos.id,
+      productId: pos.productId,
       productSku: product?.sku ?? pos.productId,
       productName: product?.name ?? '—',
       storageCode: su ? `${su.code} (${su.label})` : '—',
@@ -522,6 +523,7 @@ export function buildStockPositionsForStorageUnit(storageUnitId: string): Storag
       const company = site ? active().companies.find((c) => c.id === site.companyId) : undefined
       return {
         id: pos.id,
+        productId: pos.productId,
         productSku: product?.sku ?? pos.productId,
         productName: product?.name ?? '—',
         storageCode: su ? `${su.code} (${su.label})` : '—',

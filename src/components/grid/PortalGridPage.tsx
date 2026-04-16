@@ -9,7 +9,8 @@ import DataGrid, {
   SearchPanel,
 } from 'devextreme-react/data-grid'
 import type { RowClickEvent } from 'devextreme/ui/data_grid'
-import type { PortalGridPageConfig } from '@/components/grid/portalGridTypes'
+import type { PortalGridPageConfig, PortalGridRowActions } from '@/components/grid/portalGridTypes'
+import { PortalGridActionsCell } from '@/components/grid/PortalGridActionsCell'
 import './PortalGridPage.css'
 
 const DEFAULT_PAGE_SIZES = [5, 10, 20] as const
@@ -23,14 +24,20 @@ export function PortalGridPage<TRow extends Record<string, unknown>>({
   config,
   dataSource: dataSourceProp,
   onRowClick,
+  rowActions,
 }: {
   config: PortalGridPageConfig<TRow>
   /** When set, overrides `config.dataSource` (e.g. live snapshot from the data layer). */
   dataSource?: TRow[]
   onRowClick?: (e: RowClickEvent<TRow, string | number>) => void
+  /** When set, adds a fixed right “actions” column (View / Edit / Delete). */
+  rowActions?: PortalGridRowActions<TRow>
 }) {
   const { keyExpr, columns } = config
   const dataSource = dataSourceProp ?? config.dataSource ?? []
+  const showActions =
+    !!rowActions &&
+    (rowActions.canView || rowActions.canEdit || rowActions.canDelete)
 
   return (
     <div className="portal-grid-page-shell">
@@ -66,6 +73,24 @@ export function PortalGridPage<TRow extends Record<string, unknown>>({
             format={col.format}
           />
         ))}
+        {showActions && rowActions ? (
+          <Column
+            caption="Actions"
+            width={132}
+            minWidth={132}
+            fixed
+            fixedPosition="right"
+            allowSorting={false}
+            allowFiltering={false}
+            allowHeaderFiltering={false}
+            cssClass="portal-grid-actions-col"
+            cellRender={(ctx) => {
+              const data = ctx.data as TRow | undefined
+              if (!data) return null
+              return <PortalGridActionsCell row={data} actions={rowActions} />
+            }}
+          />
+        ) : null}
       </DataGrid>
     </div>
   )

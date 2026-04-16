@@ -1,14 +1,31 @@
+import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Button from 'devextreme-react/button'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
+import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { stockOverviewGridConfig } from '@/pages/gridPageConfigs.stockDomain'
+import type { StockOverviewRow } from '@/mocks/domain/types'
 import { buildStockPositionsForStorageUnit, getStorageUnitById, useMockStore } from '@/mocks/mockStore'
+import { useCan } from '@/auth/AuthContext'
 
 export function StorageUnitDetailPage() {
   const { storageUnitId = '' } = useParams<{ storageUnitId: string }>()
   useMockStore()
   const su = getStorageUnitById(storageUnitId)
   const rows = buildStockPositionsForStorageUnit(storageUnitId)
+  const perm = useCan('storageUnits')
+  const products = useCan('products')
+
+  const rowActions = useMemo<PortalGridRowActions<StockOverviewRow>>(
+    () => ({
+      canView: perm.view && products.view,
+      canEdit: perm.edit && products.edit,
+      canDelete: perm.delete && products.delete,
+      getViewHref: (r) => `/products/${String(r.productId)}/stock`,
+      getEditHref: (r) => `/products/${String(r.productId)}/storage`,
+    }),
+    [perm.view, perm.edit, perm.delete, products.view, products.edit, products.delete],
+  )
 
   if (!su) {
     return (
@@ -32,7 +49,7 @@ export function StorageUnitDetailPage() {
         <strong>{su.code}</strong> — {su.label} · Stock in this unit only (click a product row on the
         catalog for full product context).
       </p>
-      <PortalGridPage config={stockOverviewGridConfig} dataSource={rows} />
+      <PortalGridPage config={stockOverviewGridConfig} dataSource={rows} rowActions={rowActions} />
     </>
   )
 }

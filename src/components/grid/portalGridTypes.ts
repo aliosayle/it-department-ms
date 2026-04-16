@@ -14,3 +14,15 @@ export type PortalGridPageConfig<TRow extends Record<string, unknown>> = {
   keyExpr: keyof TRow & string
   columns: PortalGridColumn[]
 }
+
+/** Optional per-row actions column (View / Edit / Delete) — pass from list pages with RBAC + routes. */
+export type PortalGridRowActions<TRow extends Record<string, unknown>> = {
+  canView: boolean
+  canEdit: boolean
+  canDelete: boolean
+  getViewHref?: (row: TRow) => string | null
+  getEditHref?: (row: TRow) => string | null
+  onView?: (row: TRow) => void
+  onEdit?: (row: TRow) => void
+  onDelete?: (row: TRow) => void | Promise<void>
+}

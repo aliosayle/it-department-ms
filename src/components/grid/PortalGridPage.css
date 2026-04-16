@@ -21,3 +21,43 @@
   flex: 1;
   min-height: min(70vh, 720px);
 }
+
+/* Fixed actions column — compact icon toolbar */
+.portal-grid-actions-col .dx-datagrid-text-content {
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--dx-color-text, #5c5c5c);
+}
+
+.portal-grid-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.portal-grid-actions__link {
+  display: inline-flex;
+  text-decoration: none;
+  line-height: 0;
+}
+
+.portal-grid-actions .dx-button {
+  min-width: 34px;
+  width: 34px;
+  height: 30px;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+}
+
+.portal-grid-actions .dx-button.dx-button-mode-contained {
+  border: 1px solid color-mix(in srgb, var(--dx-color-primary, #0d6efd) 35%, transparent);
+}
+
+.portal-grid-actions .dx-button.dx-button-mode-outlined.dx-button-danger {
+  border-color: color-mix(in srgb, var(--dx-color-danger, #dc3545) 45%, transparent);
+}

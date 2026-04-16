@@ -1,7 +1,9 @@
+import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { RowClickEvent } from 'devextreme/ui/data_grid'
 import Button from 'devextreme-react/button'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
+import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { portalUsersGridConfig } from '@/pages/gridPageConfigs.admin'
 import type { UserListRow } from '@/pages/gridPageConfigs.admin'
 import { isLiveApi } from '@/api/config'
@@ -25,6 +27,17 @@ export function UsersListPage() {
     if (id && can.view) navigate(`/admin/users/${String(id)}`)
   }
 
+  const rowActions = useMemo<PortalGridRowActions<UserListRow>>(
+    () => ({
+      canView: can.view,
+      canEdit: can.edit,
+      canDelete: false,
+      getViewHref: (r) => `/admin/users/${String(r.id)}`,
+      getEditHref: (r) => `/admin/users/${String(r.id)}`,
+    }),
+    [can.view, can.edit],
+  )
+
   const live = isLiveApi()
 
   return (
@@ -41,7 +54,12 @@ export function UsersListPage() {
           {live ? ' Changes are saved to the database.' : ' Changes apply for this session until data is reloaded from source.'}
         </p>
       ) : null}
-      <PortalGridPage config={portalUsersGridConfig} dataSource={rows} onRowClick={onRowClick} />
+      <PortalGridPage
+        config={portalUsersGridConfig}
+        dataSource={rows}
+        onRowClick={onRowClick}
+        rowActions={rowActions}
+      />
       {can.edit ? (
         <div className="list-toolbar" style={{ marginTop: 12 }}>
           <Link to={`/admin/users/${user.id}`}>

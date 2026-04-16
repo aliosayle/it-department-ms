@@ -2,9 +2,11 @@ import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Button from 'devextreme-react/button'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
+import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { movementStatementGridConfig } from '@/pages/gridPageConfigs.stockDomain'
 import { buildMovementStatementRows, getProductById, useMockStore } from '@/mocks/mockStore'
 import type { MovementStatementRow } from '@/mocks/domain/types'
+import { useCan } from '@/auth/AuthContext'
 
 function csvEscape(s: string): string {
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`
@@ -49,6 +51,21 @@ export function ProductHistoryPage() {
   useMockStore()
   const product = getProductById(productId)
   const rows = buildMovementStatementRows(productId)
+  const perm = useCan('products')
+
+  const rowActions = useMemo<PortalGridRowActions<MovementStatementRow>>(
+    () => ({
+      canView: perm.view,
+      canEdit: perm.edit,
+      canDelete: perm.delete,
+      getViewHref: (r) => {
+        if (r.refPurchaseId) return `/purchases/${String(r.refPurchaseId)}`
+        return `/products/${productId}/stock`
+      },
+      getEditHref: () => `/products/${productId}/stock`,
+    }),
+    [perm.view, perm.edit, perm.delete, productId],
+  )
 
   const csv = useMemo(() => buildStatementCsv(rows), [rows])
 
@@ -84,7 +101,7 @@ export function ProductHistoryPage() {
       <div className="list-toolbar">
         <Button text="Copy statement as CSV" onClick={() => void copyCsv()} />
       </div>
-      <PortalGridPage config={movementStatementGridConfig} dataSource={rows} />
+      <PortalGridPage config={movementStatementGridConfig} dataSource={rows} rowActions={rowActions} />
     </>
   )
 }

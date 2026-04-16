@@ -227,6 +227,8 @@ export type PurchaseLineDetailRow = {
 /** Flat row for stock overview grid. */
 export type StockOverviewRow = {
   id: string
+  /** Product this stock position belongs to (for navigation / actions). */
+  productId: string
   productSku: string
   productName: string
   storageCode: string

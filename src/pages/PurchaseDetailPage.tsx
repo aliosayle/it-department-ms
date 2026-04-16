@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { RowClickEvent } from 'devextreme/ui/data_grid'
 import Button from 'devextreme-react/button'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
+import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { useCan } from '@/auth/AuthContext'
 import { purchaseLinesDetailGridConfig } from '@/pages/gridPageConfigs.stockDomain'
 import type { PurchaseLineDetailRow } from '@/mocks/domain/types'
@@ -31,6 +32,17 @@ export function PurchaseDetailPage() {
     const pid = e.data?.productId
     if (pid) navigate(`/products/${String(pid)}/stock`)
   }
+
+  const rowActions = useMemo<PortalGridRowActions<PurchaseLineDetailRow>>(
+    () => ({
+      canView: perm.view,
+      canEdit: perm.edit,
+      canDelete: perm.delete,
+      getViewHref: (r) => `/products/${String(r.productId)}/stock`,
+      getEditHref: (r) => `/products/${String(r.productId)}/storage`,
+    }),
+    [perm.view, perm.edit, perm.delete],
+  )
 
   const onReceive = async () => {
     setError(null)
@@ -90,6 +102,7 @@ export function PurchaseDetailPage() {
         config={purchaseLinesDetailGridConfig}
         dataSource={rows}
         onRowClick={onRowClick}
+        rowActions={rowActions}
       />
 
       {canReceive ? (

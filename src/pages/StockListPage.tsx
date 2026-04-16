@@ -1,7 +1,9 @@
+import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { RowClickEvent } from 'devextreme/ui/data_grid'
 import Button from 'devextreme-react/button'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
+import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { stockProductSummaryGridConfig } from '@/pages/gridPageConfigs.stockDomain'
 import { useCan } from '@/auth/AuthContext'
 import { buildStockOverviewByProduct, useMockStore } from '@/mocks/mockStore'
@@ -16,11 +18,23 @@ export function StockListPage() {
   const storages = useCan('storageUnits')
   const purchases = useCan('purchases')
   const suppliers = useCan('suppliers')
+  const products = useCan('products')
 
   const onRowClick = (e: RowClickEvent<StockProductSummaryRow, string | number>) => {
     const id = e.data?.productId
     if (id) navigate(`/products/${String(id)}/stock`)
   }
+
+  const rowActions = useMemo<PortalGridRowActions<StockProductSummaryRow>>(
+    () => ({
+      canView: products.view,
+      canEdit: products.edit,
+      canDelete: products.delete,
+      getViewHref: (r) => `/products/${String(r.productId)}/stock`,
+      getEditHref: (r) => `/products/${String(r.productId)}/storage`,
+    }),
+    [products.view, products.edit, products.delete],
+  )
 
   return (
     <>
@@ -58,6 +72,7 @@ export function StockListPage() {
         config={stockProductSummaryGridConfig}
         dataSource={rows}
         onRowClick={onRowClick}
+        rowActions={rowActions}
       />
     </>
   )

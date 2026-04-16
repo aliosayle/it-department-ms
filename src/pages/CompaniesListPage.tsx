@@ -1,13 +1,37 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import Button from 'devextreme-react/button'
+import notify from 'devextreme/ui/notify'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
+import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { useCan } from '@/auth/AuthContext'
 import { companiesGridConfig } from '@/pages/gridPageConfigs.stockDomain'
+import type { Company } from '@/mocks/domain/types'
 import { useMockStore } from '@/mocks/mockStore'
 
 export function CompaniesListPage() {
   const { companies } = useMockStore()
   const perm = useCan('companies')
+
+  const rowActions = useMemo<PortalGridRowActions<Company>>(
+    () => ({
+      canView: perm.view,
+      canEdit: perm.edit,
+      canDelete: perm.delete,
+      onView: (r) => {
+        const body = `${String(r.name)}\n${String(r.notes ?? '')}`.trim()
+        notify({ message: body || String(r.name), type: 'info', displayTime: 5000 })
+      },
+      onEdit: () => {
+        notify({
+          message: 'Company edit forms are not wired in this build — use Add company or the API.',
+          type: 'warning',
+          displayTime: 4000,
+        })
+      },
+    }),
+    [perm.view, perm.edit, perm.delete],
+  )
 
   return (
     <>
@@ -18,7 +42,7 @@ export function CompaniesListPage() {
           </Link>
         ) : null}
       </div>
-      <PortalGridPage config={companiesGridConfig} dataSource={companies} />
+      <PortalGridPage config={companiesGridConfig} dataSource={companies} rowActions={rowActions} />
     </>
   )
 }

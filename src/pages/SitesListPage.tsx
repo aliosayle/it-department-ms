@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import Button from 'devextreme-react/button'
+import notify from 'devextreme/ui/notify'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
+import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { useCan } from '@/auth/AuthContext'
 import {
   sitesGridConfig,
@@ -22,6 +24,29 @@ export function SitesListPage() {
     [sites, companies],
   )
 
+  const rowActions = useMemo<PortalGridRowActions<SiteRow>>(
+    () => ({
+      canView: perm.view,
+      canEdit: perm.edit,
+      canDelete: perm.delete,
+      onView: (r) => {
+        notify({
+          message: `${r.name} · ${r.companyName}\n${r.location}`,
+          type: 'info',
+          displayTime: 5000,
+        })
+      },
+      onEdit: () => {
+        notify({
+          message: 'Site edit forms are not wired in this build — use Add site or the API.',
+          type: 'warning',
+          displayTime: 4000,
+        })
+      },
+    }),
+    [perm.view, perm.edit, perm.delete],
+  )
+
   return (
     <>
       <div className="list-toolbar">
@@ -31,7 +56,7 @@ export function SitesListPage() {
           </Link>
         ) : null}
       </div>
-      <PortalGridPage config={sitesGridConfig} dataSource={rows} />
+      <PortalGridPage config={sitesGridConfig} dataSource={rows} rowActions={rowActions} />
     </>
   )
 }

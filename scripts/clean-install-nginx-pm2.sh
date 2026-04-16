@@ -146,20 +146,27 @@ if ! command -v pm2 >/dev/null 2>&1; then
   if [[ "$SKIP_PM2_INSTALL" != "1" ]]; then
     log "Installing pm2 globally (same binary for delete + start)…"
     npm install -g pm2
+    hash -r 2>/dev/null || true
   fi
 fi
 if command -v pm2 >/dev/null 2>&1; then
-  PM2_CMD=(pm2)
+  PM2_CMD=("$(command -v pm2)")
 else
   PM2_CMD=(npx --yes pm2)
 fi
-# Clear both daemons in case an old run mixed npx vs global.
-npx --yes pm2 delete it-department-api 2>/dev/null || true
-npx --yes pm2 delete it-department-spa 2>/dev/null || true
-command -v pm2 >/dev/null 2>&1 && {
-  pm2 delete it-department-api 2>/dev/null || true
-  pm2 delete it-department-spa 2>/dev/null || true
+
+# Stop+delete on both npx and global PM2 (covers mixed installs and stale names).
+pm2_nuke_app() {
+  local name="$1"
+  npx --yes pm2 stop "$name" 2>/dev/null || true
+  npx --yes pm2 delete "$name" 2>/dev/null || true
+  if command -v pm2 >/dev/null 2>&1; then
+    "$(command -v pm2)" stop "$name" 2>/dev/null || true
+    "$(command -v pm2)" delete "$name" 2>/dev/null || true
+  fi
 }
+pm2_nuke_app it-department-api
+pm2_nuke_app it-department-spa
 
 if [[ -f /etc/systemd/system/it-department-api.service ]]; then
   log "Removing systemd it-department-api.service…"
@@ -296,8 +303,10 @@ sudo systemctl restart nginx
 ECO="$REPO_ROOT/ecosystem.api-only.cjs"
 [[ -f "$ECO" ]] || die "missing ecosystem.api-only.cjs"
 log "Starting API with PM2…"
-"${PM2_CMD[@]}" delete it-department-api 2>/dev/null || true
-"${PM2_CMD[@]}" start "$ECO"
+pm2_nuke_app it-department-api
+pm2_nuke_app it-department-spa
+# -f: PM2 otherwise errors "Script already launched" if the name survived in its dump.
+"${PM2_CMD[@]}" start "$ECO" -f
 
 ok=0
 for _ in {1..30}; do

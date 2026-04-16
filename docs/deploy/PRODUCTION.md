@@ -26,6 +26,8 @@ SEED_SUPERADMIN_LOGIN=superadmin SEED_SUPERADMIN_PASSWORD='your-secure-password'
 
 With **`INSTALL_NGINX=1`** (default), **`scripts/setup-ubuntu.sh`** already runs **`npm run build`** in **`backend/`**, copies **`backend/.env`** to **`/etc/it-department/api.env`**, installs **`it-department-api.service`** ( **`User`/`Group`** = owner of the repo tree so a clone under `/home/...` works), enables it, and checks **`http://127.0.0.1:4000/health`**. If nginx returns **502**, the usual cause is the API not running: **`sudo systemctl status it-department-api`** and **`journalctl -u it-department-api -n 80 --no-pager`**.
 
+**systemd:** `WorkingDirectory=` must be a **normalized absolute path** (no **`..`** segment). Values like `/home/you/repo/backend/..` make **`systemctl`** report *Unit has a bad unit file setting*. Use e.g. **`BACKEND="$(cd /path/to/repo/backend && pwd -P)"`** when writing the unit by hand.
+
 Manual install (e.g. **`/opt/it-department`** layout):
 
 1. Build: `npm ci && npm run build` inside `backend/`.

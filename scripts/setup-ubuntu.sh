@@ -155,7 +155,9 @@ install_api_systemd() {
 
   API_USER="$(stat -c '%U' "$REPO_ROOT" 2>/dev/null || echo root)"
   API_GROUP="$(stat -c '%G' "$REPO_ROOT" 2>/dev/null || echo root)"
-  log_info "Installing REST API systemd unit (User=$API_USER, WorkingDirectory=$REPO_ROOT/backend)…"
+  # systemd rejects WorkingDirectory with ".." (not normalized); always use a resolved path.
+  BACKEND_ABS="$(cd "$REPO_ROOT/backend" && pwd -P)"
+  log_info "Installing REST API systemd unit (User=$API_USER, WorkingDirectory=$BACKEND_ABS)…"
 
   $SUDO mkdir -p /etc/it-department
   $SUDO install -m 600 -o root -g root "$REPO_ROOT/backend/.env" /etc/it-department/api.env
@@ -171,7 +173,7 @@ Wants=network-online.target
 Type=simple
 User=${API_USER}
 Group=${API_GROUP}
-WorkingDirectory=${REPO_ROOT}/backend
+WorkingDirectory=${BACKEND_ABS}
 EnvironmentFile=/etc/it-department/api.env
 ExecStart=${NODE_BIN} dist/index.js
 Restart=on-failure

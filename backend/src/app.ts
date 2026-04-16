@@ -201,6 +201,7 @@ export async function buildApp() {
           companyId: String(b.companyId ?? ''),
           siteId: String(b.siteId ?? ''),
           personnelId: String(b.personnelId ?? ''),
+          assignedByUserId: req.auth!.userId,
         })
         if (!result.ok) return reply.code(400).send({ error: 'bad_request', message: result.error })
         return result.assignment

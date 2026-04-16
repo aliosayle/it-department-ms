@@ -118,7 +118,7 @@ Issue stock or a serialized asset to personnel (custody). Replaces the former `P
 4. Insert `assignments` row (`stock_position_id` and/or `serialized_asset_id` as applicable).
 5. Insert `inventory_movements` with `ref_assignment_id` (and `ref_asset_id` when serialized), e.g. `assignment_out` / `custody_in` legs for stock path.
 
-Returns the created **assignment** JSON.
+Returns the created **assignment** JSON, including `assignedByUserId` (portal user who performed the assignment) so user-vs-employee responsibility stays explicit.
 
 ---
 

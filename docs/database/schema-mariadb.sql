@@ -211,12 +211,14 @@ CREATE TABLE IF NOT EXISTS assignments (
   company_id VARCHAR(64) NOT NULL,
   site_id VARCHAR(64) NOT NULL,
   personnel_id VARCHAR(64) NOT NULL,
+  assigned_by_user_id VARCHAR(64) NULL,
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   CONSTRAINT fk_assignments_stock_pos FOREIGN KEY (stock_position_id) REFERENCES stock_positions (id),
   CONSTRAINT fk_assignments_serialized_asset FOREIGN KEY (serialized_asset_id) REFERENCES serialized_assets (id),
   CONSTRAINT fk_assignments_company FOREIGN KEY (company_id) REFERENCES companies (id) ON DELETE RESTRICT,
   CONSTRAINT fk_assignments_site FOREIGN KEY (site_id) REFERENCES sites (id) ON DELETE RESTRICT,
   CONSTRAINT fk_assignments_personnel FOREIGN KEY (personnel_id) REFERENCES personnel (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_assignments_assigned_by_user FOREIGN KEY (assigned_by_user_id) REFERENCES portal_users (id) ON DELETE SET NULL,
   CONSTRAINT chk_assignments_qty CHECK (quantity >= 1),
   CONSTRAINT chk_assignments_stock_source CHECK (
     (source = 'external' AND stock_position_id IS NULL AND serialized_asset_id IS NULL)
@@ -229,6 +231,9 @@ CREATE TABLE IF NOT EXISTS assignments (
     )
   )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE assignments
+  ADD COLUMN IF NOT EXISTS assigned_by_user_id VARCHAR(64) NULL;
 
 CREATE TABLE IF NOT EXISTS inventory_movements (
   id VARCHAR(64) NOT NULL PRIMARY KEY,

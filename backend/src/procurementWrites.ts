@@ -22,6 +22,7 @@ export type CreateAssignmentBody = {
   companyId: string
   siteId: string
   personnelId: string
+  assignedByUserId: string
 }
 
 export async function createAssignmentTx(
@@ -29,7 +30,10 @@ export async function createAssignmentTx(
   input: CreateAssignmentBody,
 ): Promise<{ ok: true; assignment: Record<string, unknown> } | { ok: false; error: string }> {
   if (!input.companyId || !input.siteId || !input.personnelId) {
-    return { ok: false, error: 'Company, site, and recipient are required.' }
+    return { ok: false, error: 'Company, site, and recipient employee are required.' }
+  }
+  if (!input.assignedByUserId) {
+    return { ok: false, error: 'Assigned-by user is required.' }
   }
   const conn = await pool.getConnection()
   try {
@@ -145,8 +149,8 @@ export async function createAssignmentTx(
     const itemReceivedDate = input.source === 'stock' ? null : input.itemReceivedDate
 
     await conn.query(
-      `INSERT INTO assignments (id, source, stock_position_id, serialized_asset_id, quantity, item_received_date, item_description, delivered_to, site_label, date_delivered, description, company_id, site_id, personnel_id)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO assignments (id, source, stock_position_id, serialized_asset_id, quantity, item_received_date, item_description, delivered_to, site_label, date_delivered, description, company_id, site_id, personnel_id, assigned_by_user_id)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         assignmentId,
         input.source,
@@ -162,6 +166,7 @@ export async function createAssignmentTx(
         input.companyId,
         input.siteId,
         input.personnelId,
+        input.assignedByUserId,
       ],
     )
 
@@ -277,7 +282,6 @@ export async function createAssignmentTx(
       const recipientName = String(pname?.fullName ?? 'recipient')
 
       await conn.query('UPDATE stock_positions SET quantity = quantity - ? WHERE id = ?', [q, input.stockPositionId])
-      await conn.query('DELETE FROM stock_positions WHERE id = ? AND quantity <= 0', [input.stockPositionId])
 
       const [custodyPos] = await conn.query<RowDataPacket[]>(
         'SELECT id FROM stock_positions WHERE product_id = ? AND storage_unit_id = ? FOR UPDATE',
@@ -358,6 +362,7 @@ export async function createAssignmentTx(
       companyId: input.companyId,
       siteId: input.siteId,
       personnelId: input.personnelId,
+      assignedByUserId: input.assignedByUserId,
     }
     return { ok: true, assignment }
   } catch (e) {

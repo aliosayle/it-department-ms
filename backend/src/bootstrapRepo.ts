@@ -95,7 +95,8 @@ async function loadAssignmentRows(): Promise<RowDataPacket[]> {
       `SELECT id, source, stock_position_id AS stockPositionId, serialized_asset_id AS serializedAssetId, quantity,
               item_received_date AS itemReceivedDate, item_description AS itemDescription,
               delivered_to AS deliveredTo, site_label AS site, date_delivered AS dateDelivered,
-              description, company_id AS companyId, site_id AS siteId, personnel_id AS personnelId
+              description, company_id AS companyId, site_id AS siteId, personnel_id AS personnelId,
+              assigned_by_user_id AS assignedByUserId
        FROM assignments ORDER BY created_at DESC`,
     )
     return rows as RowDataPacket[]
@@ -106,7 +107,8 @@ async function loadAssignmentRows(): Promise<RowDataPacket[]> {
         `SELECT id, source, stock_position_id AS stockPositionId, NULL AS serializedAssetId, quantity,
                 item_received_date AS itemReceivedDate, item_description AS itemDescription,
                 delivered_to AS deliveredTo, site_label AS site, date_delivered AS dateDelivered,
-                description, company_id AS companyId, site_id AS siteId, personnel_id AS personnelId
+                description, company_id AS companyId, site_id AS siteId, personnel_id AS personnelId,
+                NULL AS assignedByUserId
          FROM assignments ORDER BY created_at DESC`,
       )
       return rows as RowDataPacket[]
@@ -116,7 +118,8 @@ async function loadAssignmentRows(): Promise<RowDataPacket[]> {
         `SELECT id, source, stock_position_id AS stockPositionId, NULL AS serializedAssetId, quantity,
                 item_received_date AS itemReceivedDate, item_description AS itemDescription,
                 delivered_to AS deliveredTo, site_label AS site, date_delivered AS dateDelivered,
-                description, company_id AS companyId, site_id AS siteId, personnel_id AS personnelId
+                description, company_id AS companyId, site_id AS siteId, personnel_id AS personnelId,
+                NULL AS assignedByUserId
          FROM deliveries ORDER BY created_at DESC`,
       )
       return rows as RowDataPacket[]

@@ -10,14 +10,68 @@
 #
 # Env (optional):
 #   SKIP_PM2_INSTALL=1     Do not run npm install -g pm2 when pm2 is missing
-#   RUN_MIGRATE=1          Run backend migrate (needs backend/.env)
-#   RUN_SEED=1             Run backend seed (needs SEED_SUPERADMIN_PASSWORD or .credentials-portal.env)
+#   BOOTSTRAP_DB=1        Create MariaDB database + app user from backend/.env (needs sudo mysql)
+#   RUN_MIGRATE=1         Implies BOOTSTRAP_DB unless BOOTSTRAP_DB=0 — then run npm run migrate
+#   RUN_SEED=1            Run backend seed (needs SEED_SUPERADMIN_PASSWORD or .credentials-portal.env)
 #   VITE_API_BASE_URL      SPA build API base; default: http://<first LAN IP>:4000/api/v1
+#
+# First-time DB + schema + seed (typical):
+#   RUN_MIGRATE=1 RUN_SEED=1 SEED_SUPERADMIN_PASSWORD='…' ./scripts/setup-pm2.sh
 # =============================================================================
 set -euo pipefail
 
 die() { echo "error: $*" >&2; exit 1; }
 log() { echo "[pm2-setup] $*"; }
+
+# Read KEY=value from .env (first match); value may contain '='.
+env_get() {
+  local key="$1" file="$2"
+  [[ -f "$file" ]] || return 1
+  grep "^${key}=" "$file" 2>/dev/null | head -1 | cut -d= -f2-
+}
+
+# Escape single quotes for use inside SQL single-quoted string.
+sql_quote_literal() {
+  printf '%s' "$1" | sed "s/'/''/g"
+}
+
+# Create DATABASE_NAME and DATABASE_USER@localhost + @127.0.0.1 (matches Node using DATABASE_HOST=127.0.0.1).
+bootstrap_mariadb_from_env() {
+  local envf="$REPO_ROOT/backend/.env"
+  local db_name db_user db_pw pw_esc
+  db_name="$(env_get DATABASE_NAME "$envf")"
+  db_user="$(env_get DATABASE_USER "$envf")"
+  db_pw="$(env_get DATABASE_PASSWORD "$envf")"
+  [[ -n "$db_name" && -n "$db_user" ]] || die "bootstrap: DATABASE_NAME and DATABASE_USER must be set in backend/.env"
+  [[ -n "$db_pw" ]] || die "bootstrap: DATABASE_PASSWORD must be set in backend/.env"
+  [[ "$db_name" =~ ^[a-zA-Z0-9_]+$ ]] || die "bootstrap: DATABASE_NAME must be alphanumeric/underscore only"
+  [[ "$db_user" =~ ^[a-zA-Z0-9_]+$ ]] || die "bootstrap: DATABASE_USER must be alphanumeric/underscore only"
+  pw_esc="$(sql_quote_literal "$db_pw")"
+
+  local MYSQL_CLI="mysql"
+  command -v mysql >/dev/null 2>&1 || MYSQL_CLI="mariadb"
+  command -v "$MYSQL_CLI" >/dev/null 2>&1 || die "bootstrap: install mariadb-client (mysql or mariadb CLI)"
+
+  if ! command -v sudo >/dev/null 2>&1; then
+    die "bootstrap: sudo is required to run ${MYSQL_CLI} as root for CREATE DATABASE / USER"
+  fi
+  if ! sudo "$MYSQL_CLI" -e "SELECT 1" >/dev/null 2>&1; then
+    die "bootstrap: 'sudo $MYSQL_CLI' failed (install MariaDB, ensure root can auth via sudo). Or create DB manually and set BOOTSTRAP_DB=0 RUN_MIGRATE=1."
+  fi
+
+  log "Creating MariaDB database '$db_name' and user '$db_user' (localhost + 127.0.0.1)…"
+  sudo "$MYSQL_CLI" <<SQL
+CREATE DATABASE IF NOT EXISTS \`${db_name}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+DROP USER IF EXISTS '${db_user}'@'localhost';
+DROP USER IF EXISTS '${db_user}'@'127.0.0.1';
+CREATE USER '${db_user}'@'localhost' IDENTIFIED BY '${pw_esc}';
+CREATE USER '${db_user}'@'127.0.0.1' IDENTIFIED BY '${pw_esc}';
+GRANT ALL PRIVILEGES ON \`${db_name}\`.* TO '${db_user}'@'localhost';
+GRANT ALL PRIVILEGES ON \`${db_name}\`.* TO '${db_user}'@'127.0.0.1';
+FLUSH PRIVILEGES;
+SQL
+  log "MariaDB bootstrap finished."
+}
 
 find_repo_root() {
   local start="${1:-.}"
@@ -95,7 +149,11 @@ else
   (cd "$REPO_ROOT/backend" && npm install)
 fi
 
-# --- Optional DB migrate / seed ---------------------------------------------
+# --- Optional MariaDB bootstrap + migrate / seed ----------------------------
+if [[ "${BOOTSTRAP_DB:-0}" == "1" ]] || { [[ "${RUN_MIGRATE:-0}" == "1" ]] && [[ "${BOOTSTRAP_DB:-}" != "0" ]]; }; then
+  bootstrap_mariadb_from_env
+fi
+
 if [[ "${RUN_MIGRATE:-0}" == "1" ]]; then
   log "RUN_MIGRATE=1 — npm run migrate in backend/…"
   (cd "$REPO_ROOT/backend" && npm run migrate)

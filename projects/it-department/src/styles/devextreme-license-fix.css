@@ -1,0 +1,16 @@
+/**
+ * DevExtreme trial UI (`dx-license`, `dx-license-trigger`). Inline !important on the
+ * panel often wins over this file — JS in hideDevExtremeWatermark.ts clicks the real
+ * dismiss control. Keep these rules as a first-line mask where cascade allows.
+ */
+dx-license,
+.dx-license,
+dx-license-trigger {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}

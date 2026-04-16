@@ -1,0 +1,50 @@
+[
+  {
+    "id": "INC-88301",
+    "title": "VPN split tunnel failure for Finance VLAN",
+    "priority": "P2",
+    "status": "In progress",
+    "assignee": "A. Kumar",
+    "updatedAt": "2026-04-16T08:10:00.000Z"
+  },
+  {
+    "id": "REQ-120884",
+    "title": "Laptop refresh — 14\" fleet (Marketing)",
+    "priority": "P3",
+    "status": "Queued",
+    "assignee": "Unassigned",
+    "updatedAt": "2026-04-16T07:55:00.000Z"
+  },
+  {
+    "id": "INC-88290",
+    "title": "Email sync delay on mobile (iOS 18)",
+    "priority": "P3",
+    "status": "Pending vendor",
+    "assignee": "M. Chen",
+    "updatedAt": "2026-04-16T06:40:00.000Z"
+  },
+  {
+    "id": "INC-88277",
+    "title": "SAP GUI session drops after idle 15m",
+    "priority": "P2",
+    "status": "In progress",
+    "assignee": "S. Okonkwo",
+    "updatedAt": "2026-04-16T05:12:00.000Z"
+  },
+  {
+    "id": "REQ-120870",
+    "title": "New hire onboarding — dev workstation image",
+    "priority": "P4",
+    "status": "Resolved",
+    "assignee": "J. Rivera",
+    "updatedAt": "2026-04-15T22:30:00.000Z"
+  },
+  {
+    "id": "INC-88265",
+    "title": "Wi‑Fi auth errors in Building C — floor 3",
+    "priority": "P1",
+    "status": "In progress",
+    "assignee": "Ops bridge",
+    "updatedAt": "2026-04-16T09:01:00.000Z"
+  }
+]

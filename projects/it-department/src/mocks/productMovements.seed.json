@@ -1,0 +1,76 @@
+[
+  {
+    "id": "mov-1",
+    "productId": "pr-1",
+    "at": "2026-04-01T10:00:00.000Z",
+    "delta": 12,
+    "reason": "initial_seed",
+    "refDeliveryId": null,
+    "refStockPositionId": "pos-1",
+    "note": "Seed inbound",
+    "fromStorageLabel": "—",
+    "toStorageLabel": "AV24-IT-A (IT store — Av 24)"
+  },
+  {
+    "id": "mov-1b",
+    "productId": "pr-1",
+    "at": "2026-04-05T14:00:00.000Z",
+    "delta": -1,
+    "reason": "delivery_out",
+    "refDeliveryId": "del-seed-1",
+    "refStockPositionId": "pos-1",
+    "note": "Demo issue to Haj Abed",
+    "fromStorageLabel": "AV24-IT-A (IT store — Av 24)",
+    "toStorageLabel": "ISSUED-HAJ (Issued — Haj Abed)",
+    "personnelId": "per-1"
+  },
+  {
+    "id": "mov-1c",
+    "productId": "pr-1",
+    "at": "2026-04-05T14:00:01.000Z",
+    "delta": 1,
+    "reason": "custody_in",
+    "refDeliveryId": "del-seed-1",
+    "refStockPositionId": "pos-c-1",
+    "note": "Demo issue to Haj Abed",
+    "fromStorageLabel": "AV24-IT-A (IT store — Av 24)",
+    "toStorageLabel": "ISSUED-HAJ (Issued — Haj Abed)",
+    "personnelId": "per-1"
+  },
+  {
+    "id": "mov-2",
+    "productId": "pr-2",
+    "at": "2026-04-02T09:00:00.000Z",
+    "delta": 8,
+    "reason": "initial_seed",
+    "refDeliveryId": null,
+    "refStockPositionId": "pos-2",
+    "note": "Seed inbound",
+    "fromStorageLabel": "—",
+    "toStorageLabel": "AV24-IT-A (IT store — Av 24)"
+  },
+  {
+    "id": "mov-2b",
+    "productId": "pr-2",
+    "at": "2026-04-04T08:00:00.000Z",
+    "delta": 2,
+    "reason": "receive:Transfer",
+    "refDeliveryId": null,
+    "refStockPositionId": "pos-2b",
+    "note": "Overflow to mezzanine bin",
+    "fromStorageLabel": "—",
+    "toStorageLabel": "AV24-MEZZ (Av 24 — mezzanine overflow)"
+  },
+  {
+    "id": "mov-3",
+    "productId": "pr-3",
+    "at": "2026-04-03T11:30:00.000Z",
+    "delta": 5,
+    "reason": "initial_seed",
+    "refDeliveryId": null,
+    "refStockPositionId": "pos-3",
+    "note": "Seed inbound — Futur Tower",
+    "fromStorageLabel": "—",
+    "toStorageLabel": "FT-STOR-01 (Futur Tower — stock room)"
+  }
+]

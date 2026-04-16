@@ -1,0 +1,260 @@
+import { useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import Button from 'devextreme-react/button'
+import DateBox from 'devextreme-react/date-box'
+import NumberBox from 'devextreme-react/number-box'
+import SelectBox from 'devextreme-react/select-box'
+import TextArea from 'devextreme-react/text-area'
+import TextBox from 'devextreme-react/text-box'
+import { useCan } from '@/auth/AuthContext'
+import { portalCreatePurchase } from '@/api/mutations'
+import { useMockStore } from '@/mocks/mockStore'
+import './formPage.css'
+
+type LineDraft = {
+  productId: string | null
+  quantity: number | null
+  unitPrice: number | null
+  storageUnitId: string | null
+}
+
+const emptyLine = (): LineDraft => ({
+  productId: null,
+  quantity: 1,
+  unitPrice: 0,
+  storageUnitId: null,
+})
+
+export function PurchaseNewPage() {
+  const navigate = useNavigate()
+  const { suppliers, personnel, sites, companies, products, storageUnits } = useMockStore()
+  const perm = useCan('purchases')
+
+  const [bonNumber, setBonNumber] = useState('')
+  const [supplierInvoiceRef, setSupplierInvoiceRef] = useState('')
+  const [supplierId, setSupplierId] = useState<string | null>(null)
+  const [siteId, setSiteId] = useState<string | null>('site-1')
+  const [issuedByPersonnelId, setIssuedByPersonnelId] = useState<string | null>('per-1')
+  const [orderedAt, setOrderedAt] = useState<Date | null>(new Date())
+  const [expectedAt, setExpectedAt] = useState<Date | null>(null)
+  const [notes, setNotes] = useState('')
+  const [lines, setLines] = useState<LineDraft[]>([emptyLine()])
+  const [error, setError] = useState<string | null>(null)
+
+  const supplierOptions = useMemo(
+    () => suppliers.map((s) => ({ value: s.id, text: s.name })),
+    [suppliers],
+  )
+
+  const siteOptions = useMemo(
+    () =>
+      sites.map((s) => {
+        const co = companies.find((c) => c.id === s.companyId)
+        return { value: s.id, text: `${s.name} — ${co?.name ?? ''}` }
+      }),
+    [sites, companies],
+  )
+
+  const issuerOptions = useMemo(() => {
+    if (!siteId) return []
+    return personnel
+      .filter((p) => p.siteId === siteId)
+      .map((p) => ({ value: p.id, text: `${p.fullName} <${p.email}>` }))
+  }, [personnel, siteId])
+
+  const productOptions = useMemo(
+    () => products.map((p) => ({ value: p.id, text: `${p.sku} — ${p.name}` })),
+    [products],
+  )
+
+  const storageOptions = useMemo(
+    () => storageUnits.map((u) => ({ value: u.id, text: `${u.code} — ${u.label}` })),
+    [storageUnits],
+  )
+
+  const addLine = () => setLines((prev) => [...prev, emptyLine()])
+  const removeLine = (idx: number) => setLines((prev) => prev.filter((_, i) => i !== idx))
+
+  const setLine = (idx: number, patch: Partial<LineDraft>) => {
+    setLines((prev) => prev.map((row, i) => (i === idx ? { ...row, ...patch } : row)))
+  }
+
+  const submit = async () => {
+    setError(null)
+    if (!perm.create) {
+      setError('You do not have permission to create purchases.')
+      return
+    }
+    if (!orderedAt) {
+      setError('Order date is required.')
+      return
+    }
+    const orderedStr = orderedAt.toISOString().slice(0, 10)
+    const expectedStr = expectedAt ? expectedAt.toISOString().slice(0, 10) : null
+
+    const normalizedLines = lines
+      .filter((l) => l.productId && l.storageUnitId && l.quantity != null && l.quantity >= 1)
+      .map((l) => ({
+        productId: l.productId!,
+        storageUnitId: l.storageUnitId!,
+        quantity: Math.floor(l.quantity!),
+        unitPrice: Number(l.unitPrice ?? 0),
+      }))
+
+    const result = await portalCreatePurchase({
+      bonNumber,
+      supplierInvoiceRef,
+      supplierId: supplierId ?? '',
+      issuedByPersonnelId: issuedByPersonnelId ?? '',
+      siteId: siteId ?? '',
+      orderedAt: orderedStr,
+      expectedAt: expectedStr,
+      notes,
+      lines: normalizedLines,
+    })
+
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    navigate(`/purchases/${result.purchase.id}`)
+  }
+
+  return (
+    <div className="form-page form-page--wide">
+      {error ? <p className="form-page__error">{error}</p> : null}
+      <p className="form-page__hint">
+        <Link to="/purchases">Purchases</Link> · <Link to="/master-data/suppliers">Suppliers</Link>
+      </p>
+
+      <p className="form-page__section" style={{ marginTop: '1rem' }}>
+        Commercial references
+      </p>
+      <TextBox
+        label="Delivery note number (bon / GRN) — required"
+        value={bonNumber}
+        onValueChanged={(e) => setBonNumber(String(e.value ?? ''))}
+      />
+      <TextBox
+        label="Supplier invoice / quote ref (optional)"
+        value={supplierInvoiceRef}
+        onValueChanged={(e) => setSupplierInvoiceRef(String(e.value ?? ''))}
+      />
+      <SelectBox
+        label="Supplier"
+        dataSource={supplierOptions}
+        displayExpr="text"
+        valueExpr="value"
+        value={supplierId}
+        searchEnabled
+        onValueChanged={(e) => setSupplierId(e.value as string | null)}
+      />
+      <p className="form-page__section" style={{ marginTop: '1rem' }}>
+        Receipt context
+      </p>
+      <SelectBox
+        label="Site (receipt context)"
+        dataSource={siteOptions}
+        displayExpr="text"
+        valueExpr="value"
+        value={siteId}
+        searchEnabled
+        onValueChanged={(e) => {
+          setSiteId(e.value as string | null)
+          setIssuedByPersonnelId(null)
+        }}
+      />
+      <SelectBox
+        label="Issued by (internal)"
+        dataSource={issuerOptions}
+        displayExpr="text"
+        valueExpr="value"
+        value={issuedByPersonnelId}
+        searchEnabled
+        onValueChanged={(e) => setIssuedByPersonnelId(e.value as string | null)}
+      />
+      <p className="form-page__section" style={{ marginTop: '1rem' }}>
+        Schedule
+      </p>
+      <DateBox
+        label="Order date"
+        type="date"
+        value={orderedAt}
+        onValueChanged={(e) => setOrderedAt(e.value as Date | null)}
+      />
+      <DateBox
+        label="Expected delivery (optional)"
+        type="date"
+        value={expectedAt}
+        onValueChanged={(e) => setExpectedAt(e.value as Date | null)}
+      />
+      <TextArea label="Notes" value={notes} height={72} onValueChanged={(e) => setNotes(String(e.value ?? ''))} />
+
+      <p className="form-page__section" style={{ marginTop: '1.25rem' }}>
+        Line items — receipt destination
+      </p>
+      {lines.map((line, idx) => (
+        <div
+          key={idx}
+          style={{
+            display: 'grid',
+            gap: 8,
+            marginBottom: 12,
+            padding: 12,
+            border: '1px solid var(--color-border, #ddd)',
+            borderRadius: 8,
+          }}
+        >
+          <SelectBox
+            label={`Product #${idx + 1}`}
+            dataSource={productOptions}
+            displayExpr="text"
+            valueExpr="value"
+            value={line.productId}
+            searchEnabled
+            onValueChanged={(e) => setLine(idx, { productId: e.value as string | null })}
+          />
+          <SelectBox
+            label="Receive into storage"
+            dataSource={storageOptions}
+            displayExpr="text"
+            valueExpr="value"
+            value={line.storageUnitId}
+            searchEnabled
+            onValueChanged={(e) => setLine(idx, { storageUnitId: e.value as string | null })}
+          />
+          <NumberBox
+            label="Quantity"
+            value={line.quantity ?? undefined}
+            min={1}
+            showSpinButtons
+            onValueChanged={(e) => setLine(idx, { quantity: e.value as number | null })}
+          />
+          <NumberBox
+            label="Unit price"
+            value={line.unitPrice ?? undefined}
+            min={0}
+            showSpinButtons
+            format="#,##0.##"
+            onValueChanged={(e) => setLine(idx, { unitPrice: e.value as number | null })}
+          />
+          {lines.length > 1 ? (
+            <Button text="Remove line" onClick={() => removeLine(idx)} />
+          ) : null}
+        </div>
+      ))}
+      <Button text="Add line" onClick={addLine} />
+
+      <div className="form-page__actions" style={{ marginTop: 16 }}>
+        <Button
+          text="Create purchase"
+          type="default"
+          stylingMode="contained"
+          disabled={!perm.create}
+          onClick={submit}
+        />
+        <Button text="Cancel" onClick={() => navigate('/purchases')} />
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,44 @@
+[
+  {
+    "id": "AS-774322",
+    "hostname": "srv-sql-prod-03.corp.internal",
+    "owner": "Data platform",
+    "location": "DC-East / R12",
+    "status": "In use"
+  },
+  {
+    "id": "AS-774301",
+    "hostname": "nb-finance-18492",
+    "owner": "Finance / J. Smith",
+    "location": "HQ — London",
+    "status": "In use"
+  },
+  {
+    "id": "AS-773998",
+    "hostname": "sw-acc-core-01",
+    "owner": "Network ops",
+    "location": "DC-West",
+    "status": "In use"
+  },
+  {
+    "id": "AS-773850",
+    "hostname": "stock-laptop-4421",
+    "owner": "IT stock",
+    "location": "Warehouse B",
+    "status": "Stock"
+  },
+  {
+    "id": "AS-773200",
+    "hostname": "srv-legacy-app-01",
+    "owner": "App support",
+    "location": "DC-East / R04",
+    "status": "Retired"
+  },
+  {
+    "id": "AS-772910",
+    "hostname": "ws-design-mac-07",
+    "owner": "Design",
+    "location": "HQ — NYC",
+    "status": "Repair"
+  }
+]

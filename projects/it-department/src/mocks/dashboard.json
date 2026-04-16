@@ -1,0 +1,54 @@
+{
+  "kpis": [
+    {
+      "id": "incidents",
+      "label": "Open incidents",
+      "value": 47,
+      "hint": "P1–P3, last 24h"
+    },
+    {
+      "id": "changes",
+      "label": "Changes in flight",
+      "value": 12,
+      "hint": "Scheduled this week"
+    },
+    {
+      "id": "sla",
+      "label": "SLA at risk",
+      "value": 5,
+      "hint": "Breaching in < 4h"
+    },
+    {
+      "id": "requests",
+      "label": "Queued requests",
+      "value": 128,
+      "hint": "Service desk backlog"
+    }
+  ],
+  "recentActivity": [
+    {
+      "id": "a1",
+      "time": "2026-04-16T08:42:00.000Z",
+      "text": "CHG-4412 approved — firewall policy update (DC-East)",
+      "type": "change"
+    },
+    {
+      "id": "a2",
+      "time": "2026-04-16T08:10:00.000Z",
+      "text": "INC-88301 assigned — VPN split tunnel for Finance",
+      "type": "incident"
+    },
+    {
+      "id": "a3",
+      "time": "2026-04-16T07:55:00.000Z",
+      "text": "REQ-120884 created — laptop refresh (Marketing)",
+      "type": "request"
+    },
+    {
+      "id": "a4",
+      "time": "2026-04-16T07:20:00.000Z",
+      "text": "AS-774322 lifecycle — server marked for decommission review",
+      "type": "asset"
+    }
+  ]
+}

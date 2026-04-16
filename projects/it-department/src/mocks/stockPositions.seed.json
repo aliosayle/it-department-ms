@@ -1,0 +1,37 @@
+[
+  {
+    "id": "pos-1",
+    "productId": "pr-1",
+    "storageUnitId": "su-1",
+    "quantity": 11,
+    "status": "Available"
+  },
+  {
+    "id": "pos-c-1",
+    "productId": "pr-1",
+    "storageUnitId": "su-c-per-1",
+    "quantity": 1,
+    "status": "Issued"
+  },
+  {
+    "id": "pos-2",
+    "productId": "pr-2",
+    "storageUnitId": "su-1",
+    "quantity": 8,
+    "status": "Available"
+  },
+  {
+    "id": "pos-2b",
+    "productId": "pr-2",
+    "storageUnitId": "su-1b",
+    "quantity": 2,
+    "status": "Available"
+  },
+  {
+    "id": "pos-3",
+    "productId": "pr-3",
+    "storageUnitId": "su-2",
+    "quantity": 5,
+    "status": "Available"
+  }
+]

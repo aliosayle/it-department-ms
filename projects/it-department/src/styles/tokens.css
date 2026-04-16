@@ -1,0 +1,29 @@
+:root {
+  --color-bg: #f4f6f8;
+  --color-surface: #ffffff;
+  --color-border: #e2e6ea;
+  --color-text: #1a1d21;
+  --color-text-muted: #5c6370;
+  --color-accent: #0b5cab;
+  --color-accent-muted: #e8f1fb;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --radius: 8px;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --sidebar-width: 200px;
+  --sidebar-collapsed-width: 56px;
+  --topbar-height: 52px;
+  /* Horizontal inset inside the sidebar (nav + brand). */
+  --sidebar-padding-x: 0.45rem;
+  --sidebar-padding-y: 0.45rem;
+  --sidebar-link-padding-x: 0.5rem;
+  --sidebar-link-padding-y: 0.4rem;
+  /* Main column: no max-width cap so grids use full width (was 1400px). */
+  --content-max: none;
+  /* App shell main column padding. */
+  --shell-content-padding-x: 0.75rem;
+  --shell-content-padding-y: 0.6rem;
+  /* Extra-tight inset for grid pages (see PortalGridPage.css). */
+  --portal-grid-shell-padding-x: 0.5rem;
+  --portal-grid-shell-padding-y: 0.25rem;
+}

@@ -19,6 +19,9 @@
 #   DB_USER=it_department_app
 #   WITH_APT=1            Install nginx, mariadb-server, mariadb-client, curl (Node must exist)
 #   SKIP_PM2_INSTALL=1    Do not npm install -g pm2 when pm2 missing
+#
+# Never run this script with sudo. If backend/.env is root-owned, the script
+# will sudo chown the clone to you before writing.
 # =============================================================================
 set -euo pipefail
 
@@ -90,6 +93,22 @@ SCHEMA_SQL="$REPO_ROOT/docs/database/schema-mariadb.sql"
 
 cd "$REPO_ROOT"
 
+# Root-owned files (e.g. sudo npm, setup-ubuntu copying api.env) break writes.
+ensure_repo_writable_for_current_user() {
+  local need=0
+  if [[ ! -w . ]]; then need=1; fi
+  if [[ -d backend ]] && [[ ! -w backend ]]; then need=1; fi
+  if [[ -f backend/.env ]] && [[ ! -w backend/.env ]]; then need=1; fi
+  if [[ -d backend/node_modules ]] && [[ ! -w backend/node_modules ]]; then need=1; fi
+  if [[ -d node_modules ]] && [[ ! -w node_modules ]]; then need=1; fi
+  if [[ -f .credentials-mariadb.env ]] && [[ ! -w .credentials-mariadb.env ]]; then need=1; fi
+  if [[ -f .credentials-portal.env ]] && [[ ! -w .credentials-portal.env ]]; then need=1; fi
+  if [[ "$need" == "1" ]]; then
+    log "Fixing clone ownership for $(id -un) (unwritable files — often after sudo)…"
+    sudo chown -R "$(id -un):$(id -gn)" "$REPO_ROOT"
+  fi
+}
+
 echo ""
 echo "This will:"
 echo "  - stop and REMOVE systemd unit it-department-api (if present)"
@@ -153,6 +172,8 @@ GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';
 GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'127.0.0.1';
 FLUSH PRIVILEGES;
 SQL
+
+ensure_repo_writable_for_current_user
 
 umask 077
 CRED_DB="$REPO_ROOT/.credentials-mariadb.env"

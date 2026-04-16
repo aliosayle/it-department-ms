@@ -35,6 +35,11 @@ SUDO=""
 
 cd "$REPO_ROOT"
 
+if [[ ! -w . ]] || { [[ -d backend ]] && [[ ! -w backend ]]; }; then
+  echo "[update-pm2-app] clone not writable as $(id -un); sudo chown -R …"
+  sudo chown -R "$(id -un):$(id -gn)" "$REPO_ROOT"
+fi
+
 command -v node >/dev/null 2>&1 || die "node not on PATH"
 command -v npm >/dev/null 2>&1 || die "npm not on PATH"
 

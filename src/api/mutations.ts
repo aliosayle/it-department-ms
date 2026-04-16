@@ -104,6 +104,24 @@ export async function portalUpdatePortalUser(
   }
 }
 
+export type CreatedPortalUser = { id: string; login: string; displayName: string }
+
+export async function portalCreatePortalUser(input: {
+  login: string
+  displayName: string
+  password: string
+}): Promise<{ ok: true; user: CreatedPortalUser } | { ok: false; error: string }> {
+  if (!isLiveApi()) return { ok: false, error: NEED_API }
+  try {
+    const user = await apiPostJson<CreatedPortalUser>('/users', input)
+    if (!user?.id) return { ok: false, error: 'Invalid response from server.' }
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    return { ok: true, user }
+  } catch (e) {
+    return mapLiveFailure(e) as { ok: false; error: string }
+  }
+}
+
 export async function portalAddCompany(name: string, notes = ''): Promise<Company> {
   if (!isLiveApi()) throw new Error(NEED_API)
   const row = await apiPostJson<Company>('/companies', { name, notes })

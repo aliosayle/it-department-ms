@@ -38,6 +38,7 @@ import { StorageUnitsListPage } from '@/pages/StorageUnitsListPage'
 import { UserEquipmentDetailPage } from '@/pages/UserEquipmentDetailPage'
 import { UserEquipmentListPage } from '@/pages/UserEquipmentListPage'
 import { UserPermissionsPage } from '@/pages/UserPermissionsPage'
+import { UserNewPage } from '@/pages/UserNewPage'
 import { UsersListPage } from '@/pages/UsersListPage'
 import { LoginPage } from '@/pages/LoginPage'
 
@@ -268,6 +269,14 @@ export function AppRoutes() {
           element={
             <PageGuard page="users">
               <UsersListPage />
+            </PageGuard>
+          }
+        />
+        <Route
+          path="admin/users/new"
+          element={
+            <PageGuard page="users" require="create">
+              <UserNewPage />
             </PageGuard>
           }
         />

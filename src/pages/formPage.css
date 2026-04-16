@@ -22,6 +22,14 @@
   color: var(--color-text-muted);
 }
 
+.form-page__hint--warn {
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, #b45309 35%, var(--color-border));
+  background: color-mix(in srgb, #fff7ed 88%, var(--color-surface));
+  color: #7c2d12;
+}
+
 .form-page__error {
   margin: 0;
   font-size: 0.875rem;

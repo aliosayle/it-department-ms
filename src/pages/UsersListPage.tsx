@@ -33,9 +33,10 @@ export function UsersListPage() {
       canEdit: can.edit,
       canDelete: false,
       getViewHref: (r) => `/admin/users/${String(r.id)}`,
-      getEditHref: (r) => `/admin/users/${String(r.id)}`,
+      /** Own row: view permissions read-only; editing own matrix is blocked server- and client-side. */
+      getEditHref: (r) => (r.id === user.id ? null : `/admin/users/${String(r.id)}`),
     }),
-    [can.view, can.edit],
+    [can.view, can.edit, user.id],
   )
 
   const live = isLiveApi()
@@ -50,23 +51,26 @@ export function UsersListPage() {
       </p>
       {can.edit ? (
         <p className="form-page__hint">
-          Click a row to open the access profile.
-          {live ? ' Changes are saved to the database.' : ' Changes apply for this session until data is reloaded from source.'}
+          Open a row to assign permissions. You cannot edit your own matrix — use another administrator.
+          {live ? ' Changes are saved to the database.' : ' Without the API, permission edits are session-only.'}
         </p>
       ) : null}
+      <div className="list-toolbar" style={{ marginBottom: 12 }}>
+        {can.create ? (
+          <Link to="/admin/users/new">
+            <Button text="Create user" type="default" stylingMode="contained" />
+          </Link>
+        ) : null}
+        <Link to={`/admin/users/${user.id}`}>
+          <Button text="My access (read-only)" />
+        </Link>
+      </div>
       <PortalGridPage
         config={portalUsersGridConfig}
         dataSource={rows}
         onRowClick={onRowClick}
         rowActions={rowActions}
       />
-      {can.edit ? (
-        <div className="list-toolbar" style={{ marginTop: 12 }}>
-          <Link to={`/admin/users/${user.id}`}>
-            <Button text="Edit my permissions" />
-          </Link>
-        </div>
-      ) : null}
     </>
   )
 }

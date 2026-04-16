@@ -12,6 +12,7 @@ import { createDeliveryTx, createPurchaseTx, receivePurchaseTx } from './procure
 import {
   insertCompany,
   insertPersonnel,
+  insertPortalUser,
   insertSite,
   insertSupplier,
   replaceUserPermissions,
@@ -270,8 +271,31 @@ export async function buildApp() {
         })
       })
 
+      r.post('/users', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'users', 'create')
+        const b = req.body as { login?: string; displayName?: string; password?: string }
+        try {
+          const row = await insertPortalUser(pool, {
+            login: String(b.login ?? ''),
+            displayName: String(b.displayName ?? ''),
+            password: String(b.password ?? ''),
+          })
+          return reply.code(201).send(row)
+        } catch (e) {
+          const err = e as Error & { statusCode?: number }
+          const code = err.statusCode === 409 ? 409 : 400
+          return reply.code(code).send({ error: code === 409 ? 'conflict' : 'bad_request', message: err.message })
+        }
+      })
+
       r.patch<{ Params: { id: string } }>('/users/:id/permissions', { preHandler: requireAuth }, async (req, reply) => {
         assertPermission(req.auth!.perms, 'users', 'edit')
+        if (req.params.id === req.auth!.userId) {
+          return reply.code(403).send({
+            error: 'forbidden',
+            message: 'You cannot change your own permissions. Ask another administrator.',
+          })
+        }
         const b = req.body as { permissions?: Record<string, PageCrud> }
         if (!b.permissions) {
           return reply.code(400).send({ error: 'bad_request', message: 'permissions object required' })

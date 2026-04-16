@@ -1,3 +1,4 @@
+import bcrypt from 'bcrypt'
 import type { Pool, RowDataPacket } from 'mysql2/promise'
 import { nextId } from './id.js'
 import type { PageCrud, PageKey } from './pageKeys.js'
@@ -82,6 +83,52 @@ export async function insertSupplier(
     address: (row.address || '').trim(),
     notes: (row.notes || '').trim(),
   }
+}
+
+/** Create a portal login with a password hash and **deny-all** page permissions (safe default). */
+export async function insertPortalUser(
+  pool: Pool,
+  row: { login: string; displayName: string; password: string },
+): Promise<{ id: string; login: string; displayName: string }> {
+  const login = row.login.trim()
+  const displayName = row.displayName.trim()
+  const password = row.password
+  if (login.length < 2) throw Object.assign(new Error('Login must be at least 2 characters.'), { statusCode: 400 })
+  if (displayName.length < 1) throw Object.assign(new Error('Display name is required.'), { statusCode: 400 })
+  if (password.length < 10) {
+    throw Object.assign(new Error('Password must be at least 10 characters.'), { statusCode: 400 })
+  }
+
+  const [[dup]] = await pool.query<RowDataPacket[]>('SELECT id FROM portal_users WHERE login = ?', [login])
+  if (dup) throw Object.assign(new Error('That login is already in use.'), { statusCode: 409 })
+
+  const id = nextId('u')
+  const passwordHash = await bcrypt.hash(password, 12)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    await conn.query(
+      'INSERT INTO portal_users (id, display_name, login, password_hash, subject, personnel_id) VALUES (?,?,?,?,NULL,NULL)',
+      [id, displayName, login, passwordHash],
+    )
+    await conn.query('DELETE FROM user_page_permissions WHERE user_id = ?', [id])
+    const defaults = denyAll()
+    for (const key of ALL_PAGE_KEYS) {
+      const crud = defaults[key]
+      await conn.query(
+        'INSERT INTO user_page_permissions (user_id, page_key, can_view, can_edit, can_delete, can_create) VALUES (?,?,?,?,?,?)',
+        [id, key, crud.view ? 1 : 0, crud.edit ? 1 : 0, crud.delete ? 1 : 0, crud.create ? 1 : 0],
+      )
+    }
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
+
+  return { id, login, displayName }
 }
 
 export async function replaceUserPermissions(

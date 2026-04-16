@@ -115,9 +115,10 @@ Receive all lines into stock (idempotent).
 | Method | Path | Notes |
 |--------|------|--------|
 | GET | `/me` | Current user and effective `PageKey` permission map |
-| PATCH | `/users/:id/permissions` | Body `{ "permissions": { "<pageKey>": { "view", "edit", "delete", "create" } } }`; requires `users` **edit** |
+| POST | `/users` | Body `{ "login", "displayName", "password" }` (password min 10 chars). Requires `users` **create**. Returns `{ id, login, displayName }` with **201**. New user gets **deny-all** `user_page_permissions` rows (no implicit full access). |
+| PATCH | `/users/:id/permissions` | Body `{ "permissions": { "<pageKey>": { "view", "edit", "delete", "create" } } }`; requires `users` **edit**. **403** if `:id` is the **authenticated user’s own id** (cannot change your own permissions via the API). |
 
-The SPA uses `portalUpdatePortalUser` (`src/api/mutations.ts`) which issues this PATCH when `VITE_API_BASE_URL` is set.
+The SPA uses `portalCreatePortalUser` / `portalUpdatePortalUser` (`src/api/mutations.ts`) when `VITE_API_BASE_URL` is set.
 
 ---
 

@@ -7,6 +7,7 @@ export {
   portalCreateDelivery,
   portalCreatePurchase,
   portalReceivePurchase,
+  portalCreatePortalUser,
   portalUpdatePortalUser,
   portalAddCompany,
   portalAddSite,

@@ -3,9 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import Button from 'devextreme-react/button'
 import CheckBox from 'devextreme-react/check-box'
 import { ALL_PAGE_KEYS } from '@/auth/pageKeys'
-import { useCan } from '@/auth/AuthContext'
+import { isLiveApi } from '@/api/config'
+import { useAuth, useCan } from '@/auth/AuthContext'
 import { portalUpdatePortalUser } from '@/api/mutations'
-import { useMockStore } from '@/mocks/mockStore'
+import { useMockStore, updatePortalUser } from '@/mocks/mockStore'
 import type { PageCrud, PageKey } from '@/mocks/domain/types'
 import './formPage.css'
 
@@ -21,8 +22,12 @@ export function UserPermissionsPage() {
   const { userId = '' } = useParams<{ userId: string }>()
   const snap = useMockStore()
   const navigate = useNavigate()
+  const { user: sessionUser } = useAuth()
   const usersPerm = useCan('users')
   const target = useMemo(() => snap.users.find((u) => u.id === userId), [snap.users, userId])
+  const isSelf = userId === sessionUser.id
+  const canEditThisUser = usersPerm.edit && !isSelf
+  const live = isLiveApi()
   const [perms, setPerms] = useState<Record<PageKey, PageCrud> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -51,11 +56,23 @@ export function UserPermissionsPage() {
   const save = async () => {
     setError(null)
     setSaved(false)
-    if (!perms || !usersPerm.edit) return
-    const result = await portalUpdatePortalUser(userId, perms)
-    if (!result.ok) {
-      setError(result.error)
+    if (!perms || !canEditThisUser) return
+    if (isSelf) {
+      setError('You cannot change your own permissions.')
       return
+    }
+    if (live) {
+      const result = await portalUpdatePortalUser(userId, perms)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+    } else {
+      const result = updatePortalUser(userId, perms)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
     }
     setSaved(true)
   }
@@ -77,8 +94,18 @@ export function UserPermissionsPage() {
       {saved ? <p className="form-page__hint">Saved.</p> : null}
       <h2 style={{ marginTop: 0 }}>{target.displayName}</h2>
       <p className="form-page__hint">Login: {target.login}</p>
+      {isSelf ? (
+        <p className="form-page__hint form-page__hint--warn" role="status">
+          This is <strong>your</strong> account. For security, <strong>you cannot edit your own permissions</strong> in
+          the portal — even as an administrator. Ask another admin to adjust your access, or use a direct database
+          change in emergencies.
+        </p>
+      ) : null}
       {!usersPerm.edit ? (
         <p className="form-page__hint">You can view this matrix but not change it.</p>
+      ) : null}
+      {usersPerm.edit && !isSelf && !live ? (
+        <p className="form-page__hint">API not configured — changes apply in this browser session only.</p>
       ) : null}
 
       <p className="form-page__section" style={{ marginTop: '1rem' }}>
@@ -104,10 +131,10 @@ export function UserPermissionsPage() {
                 <CheckBox
                   key={`${page}-${action}`}
                   text={action}
-                  readOnly={!usersPerm.edit}
+                  readOnly={!canEditThisUser}
                   value={perms[page][action]}
                   onValueChanged={(e) => {
-                    if (!usersPerm.edit) return
+                    if (!canEditThisUser) return
                     setFlag(page, action, Boolean(e.value))
                   }}
                 />
@@ -118,8 +145,8 @@ export function UserPermissionsPage() {
       </div>
 
       <div className="form-page__actions" style={{ marginTop: 20 }}>
-        {usersPerm.edit ? (
-          <Button text="Save" type="default" stylingMode="contained" onClick={save} />
+        {canEditThisUser ? (
+          <Button text="Save" type="default" stylingMode="contained" onClick={() => void save()} />
         ) : null}
         <Button text="Back" onClick={() => navigate('/admin/users')} />
       </div>

@@ -28,6 +28,103 @@ function isoDt(v: unknown): string {
 
 export type BootstrapSnapshot = Record<string, unknown>
 
+/** Missing column / table — allow legacy DBs until migration is applied. */
+function isSchemaCompatibilityError(e: unknown): boolean {
+  const x = e as { code?: string; errno?: number }
+  if (x.code === 'ER_BAD_FIELD_ERROR' || x.code === 'ER_NO_SUCH_TABLE') return true
+  if (x.errno === 1054 || x.errno === 1146) return true
+  return false
+}
+
+async function loadProductsRows(): Promise<RowDataPacket[]> {
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT id, reference, sku, name, brand, category, description, tracking_mode AS trackingMode FROM products ORDER BY reference',
+    )
+    return rows as RowDataPacket[]
+  } catch (e) {
+    if (!isSchemaCompatibilityError(e)) throw e
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT id, sku AS reference, sku, name, brand, category, description,
+              'quantity' AS trackingMode
+       FROM products ORDER BY sku`,
+    )
+    return rows as RowDataPacket[]
+  }
+}
+
+async function loadInventoryMovementRows(): Promise<RowDataPacket[]> {
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT id, product_id AS productId, occurred_at AS occurredAt, delta, reason, note,
+              ref_assignment_id AS refAssignmentId, ref_asset_id AS refAssetId, ref_stock_position_id AS refStockPositionId,
+              purchase_id AS refPurchaseId, personnel_id AS personnelId, correlation_id AS correlationId,
+              from_storage_label AS fromStorageLabel, to_storage_label AS toStorageLabel
+       FROM inventory_movements ORDER BY occurred_at DESC`,
+    )
+    return rows as RowDataPacket[]
+  } catch (e) {
+    if (!isSchemaCompatibilityError(e)) throw e
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT id, product_id AS productId, occurred_at AS occurredAt, delta, reason, note,
+              ref_delivery_id AS refAssignmentId, NULL AS refAssetId, ref_stock_position_id AS refStockPositionId,
+              purchase_id AS refPurchaseId, personnel_id AS personnelId, correlation_id AS correlationId,
+              from_storage_label AS fromStorageLabel, to_storage_label AS toStorageLabel
+       FROM inventory_movements ORDER BY occurred_at DESC`,
+    )
+    return rows as RowDataPacket[]
+  }
+}
+
+async function loadSerializedAssetRows(): Promise<RowDataPacket[]> {
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT id, product_id AS productId, identifier, site_id AS siteId, storage_unit_id AS storageUnitId,
+              status, created_at AS createdAt
+       FROM serialized_assets ORDER BY created_at DESC`,
+    )
+    return rows as RowDataPacket[]
+  } catch (e) {
+    if (!isSchemaCompatibilityError(e)) throw e
+    return []
+  }
+}
+
+async function loadAssignmentRows(): Promise<RowDataPacket[]> {
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT id, source, stock_position_id AS stockPositionId, serialized_asset_id AS serializedAssetId, quantity,
+              item_received_date AS itemReceivedDate, item_description AS itemDescription,
+              delivered_to AS deliveredTo, site_label AS site, date_delivered AS dateDelivered,
+              description, company_id AS companyId, site_id AS siteId, personnel_id AS personnelId
+       FROM assignments ORDER BY created_at DESC`,
+    )
+    return rows as RowDataPacket[]
+  } catch (e1) {
+    if (!isSchemaCompatibilityError(e1)) throw e1
+    try {
+      const [rows] = await pool.query<RowDataPacket[]>(
+        `SELECT id, source, stock_position_id AS stockPositionId, NULL AS serializedAssetId, quantity,
+                item_received_date AS itemReceivedDate, item_description AS itemDescription,
+                delivered_to AS deliveredTo, site_label AS site, date_delivered AS dateDelivered,
+                description, company_id AS companyId, site_id AS siteId, personnel_id AS personnelId
+         FROM assignments ORDER BY created_at DESC`,
+      )
+      return rows as RowDataPacket[]
+    } catch (e2) {
+      if (!isSchemaCompatibilityError(e2)) throw e2
+      const [rows] = await pool.query<RowDataPacket[]>(
+        `SELECT id, source, stock_position_id AS stockPositionId, NULL AS serializedAssetId, quantity,
+                item_received_date AS itemReceivedDate, item_description AS itemDescription,
+                delivered_to AS deliveredTo, site_label AS site, date_delivered AS dateDelivered,
+                description, company_id AS companyId, site_id AS siteId, personnel_id AS personnelId
+         FROM deliveries ORDER BY created_at DESC`,
+      )
+      return rows as RowDataPacket[]
+    }
+  }
+}
+
 export async function loadBootstrapSnapshot(): Promise<BootstrapSnapshot> {
   const [companies] = await pool.query<RowDataPacket[]>('SELECT id, name, notes FROM companies ORDER BY name')
   const [sites] = await pool.query<RowDataPacket[]>(
@@ -39,34 +136,16 @@ export async function loadBootstrapSnapshot(): Promise<BootstrapSnapshot> {
   const [storageUnits] = await pool.query<RowDataPacket[]>(
     'SELECT id, site_id AS siteId, code, label, kind, personnel_id AS personnelId FROM storage_units ORDER BY code',
   )
-  const [products] = await pool.query<RowDataPacket[]>(
-    'SELECT id, reference, sku, name, brand, category, description, tracking_mode AS trackingMode FROM products ORDER BY reference',
-  )
+  const products = await loadProductsRows()
   const [stockPositions] = await pool.query<RowDataPacket[]>(
     'SELECT id, product_id AS productId, storage_unit_id AS storageUnitId, quantity, status FROM stock_positions',
   )
-  const [productMovements] = await pool.query<RowDataPacket[]>(
-    `SELECT id, product_id AS productId, occurred_at AS occurredAt, delta, reason, note,
-            ref_assignment_id AS refAssignmentId, ref_asset_id AS refAssetId, ref_stock_position_id AS refStockPositionId,
-            purchase_id AS refPurchaseId, personnel_id AS personnelId, correlation_id AS correlationId,
-            from_storage_label AS fromStorageLabel, to_storage_label AS toStorageLabel
-     FROM inventory_movements ORDER BY occurred_at DESC`,
-  )
+  const productMovements = await loadInventoryMovementRows()
   const [productReports] = await pool.query<RowDataPacket[]>(
     'SELECT id, product_id AS productId, period, metric, value FROM product_report_rows',
   )
-  const [serializedAssets] = await pool.query<RowDataPacket[]>(
-    `SELECT id, product_id AS productId, identifier, site_id AS siteId, storage_unit_id AS storageUnitId,
-            status, created_at AS createdAt
-     FROM serialized_assets ORDER BY created_at DESC`,
-  )
-  const [assignments] = await pool.query<RowDataPacket[]>(
-    `SELECT id, source, stock_position_id AS stockPositionId, serialized_asset_id AS serializedAssetId, quantity,
-            item_received_date AS itemReceivedDate, item_description AS itemDescription,
-            delivered_to AS deliveredTo, site_label AS site, date_delivered AS dateDelivered,
-            description, company_id AS companyId, site_id AS siteId, personnel_id AS personnelId
-     FROM assignments ORDER BY created_at DESC`,
-  )
+  const serializedAssets = await loadSerializedAssetRows()
+  const assignments = await loadAssignmentRows()
   const [userEquipment] = await pool.query<RowDataPacket[]>(
     `SELECT id, name, department, form_factor AS formFactor, brand, os_installed AS osInstalled, specs,
             ip_addresses AS ipAddresses, mac_address AS macAddress, screen_accessories AS screenAccessories,

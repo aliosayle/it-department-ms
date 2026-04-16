@@ -1,5 +1,6 @@
 import type { RowDataPacket } from 'mysql2/promise'
 import { pool } from './db.js'
+import { jsonSafeDeep } from './jsonSafe.js'
 import {
   type PageCrud,
   type PageKey,
@@ -227,7 +228,7 @@ export async function loadBootstrapSnapshot(): Promise<BootstrapSnapshot> {
       receivedAt: r.receivedAt == null ? null : isoDate(r.receivedAt),
     }))
 
-  return {
+  const snapshot: BootstrapSnapshot = {
     companies,
     sites,
     personnel,
@@ -248,6 +249,7 @@ export async function loadBootstrapSnapshot(): Promise<BootstrapSnapshot> {
     purchases: mapPurchases(purchases as RowDataPacket[]),
     purchaseLines,
   }
+  return jsonSafeDeep(snapshot)
 }
 
 export async function getUserPermissions(userId: string): Promise<Record<PageKey, PageCrud>> {

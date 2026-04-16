@@ -10,4 +10,7 @@ export const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   namedPlaceholders: true,
+  /** Avoid bigint in RowDataPacket (JSON.stringify cannot serialize BigInt). */
+  supportBigNumbers: true,
+  bigNumberStrings: true,
 })

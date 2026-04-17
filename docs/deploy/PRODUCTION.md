@@ -2,6 +2,34 @@
 
 This matches the v1 plan: **nginx** serves the Vite build and proxies **`/api/`** to the Node API; **MariaDB** holds data; **JWT** auth is enforced when the SPA is built with `VITE_API_BASE_URL` pointing at that API.
 
+## nginx shows `404 Not Found` after `git pull` and `npm run build`
+
+`npm run build` only writes files under **`dist/` inside your clone** (e.g. `~/it-department-ms/dist/`). Nginx is usually configured with **`root`** pointing at a **different** directory (default in our scripts: **`/var/www/it-department-portal`**). If you restart PM2 but never copy the new **`dist/`** into that **`root`**, the browser still sees an empty or stale tree and nginx returns **404** for `/` (no `index.html`).
+
+**Fix (pick one):**
+
+1. **Recommended after pull:** from the repo root, run **`./scripts/update-pm2-app.sh`** — it installs deps, builds SPA + API, **`pm2 restart`**, **`rsync`s `dist/` → `WEB_ROOT`**, and reloads nginx.
+
+2. **If you already built manually** (`npm run build` + backend build + `pm2 restart all`): sync only the SPA:
+
+   ```bash
+   cd ~/it-department-ms
+   chmod +x scripts/sync-spa-to-nginx.sh
+   ./scripts/sync-spa-to-nginx.sh
+   ```
+
+   Optional: `export WEB_ROOT=/your/nginx/root` if it differs from `/var/www/it-department-portal`.
+
+3. **One-off rsync** (same as the script):
+
+   ```bash
+   sudo mkdir -p /var/www/it-department-portal
+   sudo rsync -a --delete ~/it-department-ms/dist/ /var/www/it-department-portal/
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+
+**Verify:** `ls /var/www/it-department-portal/index.html` and `grep root /etc/nginx/sites-enabled/it-department-portal.conf` — the `root` path must contain that `index.html`.
+
 ## 1. Database and portal bootstrap user
 
 `scripts/setup-ubuntu.sh` with **`INSTALL_MARIADB=1`** (default) will:

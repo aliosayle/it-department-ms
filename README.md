@@ -11,6 +11,8 @@ Internal operations portal: **Vite**, **React**, **TypeScript**, and **DevExtrem
 
 **Backend** (`backend/`): `npm run dev`, `npm run migrate`, `npm run seed` (requires `SEED_SUPERADMIN_PASSWORD`; creates one superadmin user only). **`scripts/setup-ubuntu.sh`** writes **`.credentials-portal.env`** with the first superadmin password when MariaDB is installed. Run with **`VERBOSE=1`** for `set -x` and clearer step-by-step `[setup]` logs.
 
+**Production (nginx):** `npm run build` only updates `dist/` in the clone. If nginx still shows **404**, copy `dist/` to nginx’s `root` (e.g. **`./scripts/sync-spa-to-nginx.sh`** or full **`./scripts/update-pm2-app.sh`**). See [docs/deploy/PRODUCTION.md](docs/deploy/PRODUCTION.md).
+
 ## DevExtreme licensing (evaluation vs production)
 
 - **Development / evaluation:** [`src/main.tsx`](src/main.tsx) calls `config({ licenseKey })` using [`src/config/license.ts`](src/config/license.ts) (defaults to the evaluation key unless `VITE_DEVEXTREME_LICENSE_KEY` is set). Optional evaluation UI mitigation runs via [`src/utils/hideDevExtremeWatermark.ts`](src/utils/hideDevExtremeWatermark.ts) and [`src/styles/devextreme-license-fix.css`](src/styles/devextreme-license-fix.css). Disable the runtime mitigation with `VITE_ENABLE_EVAL_WATERMARK_MITIGATION=false` (see below); remove the CSS import from `main.tsx` when it is no longer needed.

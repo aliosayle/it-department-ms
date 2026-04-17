@@ -47,6 +47,19 @@ ls -la /home/you/it-department-ms/dist/index.html
 sudo tail -30 /var/log/nginx/error.log
 ```
 
+**Log line:** `stat() ".../dist/index.html" failed (13: Permission denied)` or `forbidden (13: Permission denied)` — nginx cannot read that path as **`www-data`**. Apply execute on home and repo path, and read+execute on `dist` (directories need `x` to enter):
+
+```bash
+sudo chmod o+x /home/it-glpi
+sudo chmod o+x /home/it-glpi/it-department-ms
+sudo chmod -R a+rX /home/it-glpi/it-department-ms/dist
+sudo systemctl reload nginx
+```
+
+(Stricter alternative: keep home `700` and set **`root`** to **`/var/www/it-department-portal`**, then **`./scripts/sync-spa-to-nginx.sh`** after each build.)
+
+**Log line:** `connect() failed (111: Connection refused) while connecting to upstream ... 127.0.0.1:4000` — the **API is not listening**. Start or restart it, e.g. **`pm2 restart it-department-api`** (or `pm2 start ecosystem.api-only.cjs`) and confirm **`curl -sS http://127.0.0.1:4000/health`** returns OK.
+
 ## 1. Database and portal bootstrap user
 
 `scripts/setup-ubuntu.sh` with **`INSTALL_MARIADB=1`** (default) will:

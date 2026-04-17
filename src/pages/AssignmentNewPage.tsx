@@ -145,12 +145,6 @@ export function AssignmentNewPage() {
         setError('Select a warehouse stock position or a serialized asset at this site.')
         return
       }
-      if (!recipientHasCustody) {
-        setError(
-          'Recipient needs a custody storage unit. Create one at Storage units (kind: custody) for this person.',
-        )
-        return
-      }
     }
     const receivedStr =
       source === 'external' && itemReceivedDate
@@ -199,8 +193,10 @@ export function AssignmentNewPage() {
       <p className="form-page__hint">
         <strong>From stock (bulk):</strong> quantity is removed from the selected warehouse bin and added to the
         recipient’s <strong>custody</strong> bin. <strong>Serialized asset:</strong> one MAC/serial unit moves into
-        custody (quantity fixed to 1).{' '}
-        <Link to="/stock/storage-units/new">New storage unit</Link> — kind <strong>custody</strong> for the recipient.
+        custody (quantity fixed to 1). If they have no custody bin yet, one is created automatically when you save. You
+        can still add a named custody row under{' '}
+        <Link to="/stock/storage-units/new">New storage unit</Link> (kind <strong>custody</strong>) if you prefer a
+        custom code or label.
       </p>
 
       <p className="form-page__section">Recipient</p>
@@ -242,9 +238,10 @@ export function AssignmentNewPage() {
         onValueChanged={(e) => setPersonnelId(e.value as string | null)}
       />
       {personnelId && !recipientHasCustody ? (
-        <p className="form-page__hint form-page__hint--warn">
-          This person has no <strong>custody</strong> bin yet — stock-based assignment will fail until you add one (
-          <Link to="/stock/storage-units/new">new storage unit</Link>, same site, kind custody, holder = this person).
+        <p className="form-page__hint">
+          This person has no <strong>custody</strong> bin in master data yet — saving a stock assignment will create one
+          automatically. Optional: add a named bin at{' '}
+          <Link to="/stock/storage-units/new">New storage unit</Link> (same site, kind custody, holder = this person).
         </p>
       ) : null}
 

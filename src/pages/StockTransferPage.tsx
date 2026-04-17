@@ -22,7 +22,11 @@ export function StockTransferPage() {
 
   const positionOptions = useMemo(() => {
     return stockPositions
-      .filter((p) => p.quantity > 0)
+      .filter((pos) => {
+        if (pos.quantity <= 0) return false
+        const su = storageUnits.find((u) => u.id === pos.storageUnitId)
+        return su?.kind !== 'custody'
+      })
       .map((pos) => {
         const pr = products.find((p) => p.id === pos.productId)
         const su = storageUnits.find((u) => u.id === pos.storageUnitId)
@@ -36,11 +40,15 @@ export function StockTransferPage() {
   const fromPos = stockPositions.find((p) => p.id === fromStockPositionId)
 
   const masterDataReady = products.length > 0 && storageUnits.length > 0
-  const hasTransferableQty = stockPositions.some((p) => p.quantity > 0)
+  const hasTransferableQty = stockPositions.some((p) => {
+    if (p.quantity <= 0) return false
+    const su = storageUnits.find((u) => u.id === p.storageUnitId)
+    return su?.kind !== 'custody'
+  })
 
   const storageOptions = useMemo(() => {
     return storageUnits
-      .filter((u) => !fromPos || u.id !== fromPos.storageUnitId)
+      .filter((u) => u.kind !== 'custody' && (!fromPos || u.id !== fromPos.storageUnitId))
       .map((u) => ({ value: u.id, text: `${u.code} — ${u.label}` }))
   }, [storageUnits, fromPos])
 
@@ -71,8 +79,8 @@ export function StockTransferPage() {
     <div className="form-page form-page--wide">
       {error ? <p className="form-page__error">{error}</p> : null}
       <p className="form-page__hint">
-        Moves quantity between storage units (same product). Writes paired transfer movements. Source and destination
-        must be at the same site (enforced by the API).
+        Moves quantity between non-custody storage units at the same site. Custody is updated only via{' '}
+        <Link to="/assignments/new">Assignments</Link>.
       </p>
       {!masterDataReady ? (
         <p className="form-page__hint form-page__hint--warn">

@@ -52,13 +52,28 @@ export async function receiveStockInConn(
           'This product is tracked by serial/MAC. Use POST /api/v1/inventory/receive-serialized with identifiers instead of quantity receive.',
       }
     }
-    const [[su]] = await conn.query<RowDataPacket[]>('SELECT id, code, label FROM storage_units WHERE id = ?', [
-      input.storageUnitId,
-    ])
+    const [[su]] = await conn.query<RowDataPacket[]>(
+      'SELECT id, code, label, kind, personnel_id AS personnelId FROM storage_units WHERE id = ?',
+      [input.storageUnitId],
+    )
     if (!su) return { ok: false, error: 'Storage unit not found.' }
+    const isCustody = String(su.kind).toLowerCase() === 'custody'
+    if (isCustody && !input.purchaseId) {
+      return {
+        ok: false,
+        error:
+          'Cannot receive into a custody bin without a purchase. Receive into a warehouse or shelf unit, or receive via a purchase line targeting this custody bin.',
+      }
+    }
+    if (isCustody && input.purchaseId) {
+      if (!su.personnelId) {
+        return { ok: false, error: 'Custody storage unit has no personnel holder.' }
+      }
+    }
     const toLabel = fmtLabel(String(su.code), String(su.label))
-    const status = (input.status || 'Available').trim()
+    const status = isCustody ? 'Issued' : (input.status || 'Available').trim()
     const note = (input.note || '').trim()
+    const movementPersonnelId = isCustody && su.personnelId ? String(su.personnelId) : null
 
     const [existing] = await conn.query<RowDataPacket[]>(
       'SELECT id, quantity FROM stock_positions WHERE product_id = ? AND storage_unit_id = ? FOR UPDATE',
@@ -92,7 +107,7 @@ export async function receiveStockInConn(
         null,
         positionId,
         input.purchaseId ?? null,
-        null,
+        movementPersonnelId,
         null,
         '—',
         toLabel,
@@ -121,14 +136,27 @@ export async function receiveSerializedInConn(
       return { ok: false, error: 'This product is not configured for serialized tracking.' }
     }
     const [[su]] = await conn.query<RowDataPacket[]>(
-      'SELECT id, code, label, site_id AS siteId FROM storage_units WHERE id = ?',
+      'SELECT id, code, label, site_id AS siteId, kind, personnel_id AS personnelId FROM storage_units WHERE id = ?',
       [input.storageUnitId],
     )
     if (!su) return { ok: false, error: 'Storage unit not found.' }
+    const isCustody = String(su.kind).toLowerCase() === 'custody'
+    if (isCustody && !input.purchaseId) {
+      return {
+        ok: false,
+        error:
+          'Cannot receive serialized assets into a custody bin without a purchase. Receive into site storage, or use a purchase line to this custody bin.',
+      }
+    }
+    if (isCustody && input.purchaseId && !su.personnelId) {
+      return { ok: false, error: 'Custody storage unit has no personnel holder.' }
+    }
     const siteId = String(su.siteId)
     const toLabel = fmtLabel(String(su.code), String(su.label))
     const note = (input.note || '').trim() || 'Serialized receive'
     const reason = `receive:${input.reason}`
+    const assetStatus = isCustody ? 'Issued' : 'Available'
+    const movementPersonnelId = isCustody && su.personnelId ? String(su.personnelId) : null
 
     for (const identifier of ids) {
       const [[dup]] = await conn.query<RowDataPacket[]>('SELECT id FROM serialized_assets WHERE identifier = ?', [
@@ -140,7 +168,7 @@ export async function receiveSerializedInConn(
       const assetId = nextId('ast')
       await conn.query(
         'INSERT INTO serialized_assets (id, product_id, identifier, site_id, storage_unit_id, status) VALUES (?,?,?,?,?,?)',
-        [assetId, input.productId, identifier, siteId, input.storageUnitId, 'Available'],
+        [assetId, input.productId, identifier, siteId, input.storageUnitId, assetStatus],
       )
       const movId = nextId('mov')
       await conn.query(
@@ -155,7 +183,7 @@ export async function receiveSerializedInConn(
           assetId,
           null,
           input.purchaseId ?? null,
-          null,
+          movementPersonnelId,
           null,
           '—',
           toLabel,
@@ -253,7 +281,7 @@ export async function transferStockTx(pool: Pool, input: TransferInput): Promise
       return { ok: false, error: 'Serialized products are moved as individual assets, not bulk transfer.' }
     }
     const [[destSu]] = await conn.query<RowDataPacket[]>(
-      'SELECT id, code, label, site_id AS siteId FROM storage_units WHERE id = ?',
+      'SELECT id, code, label, site_id AS siteId, kind FROM storage_units WHERE id = ?',
       [input.toStorageUnitId],
     )
     if (!destSu) {
@@ -261,12 +289,20 @@ export async function transferStockTx(pool: Pool, input: TransferInput): Promise
       return { ok: false, error: 'Destination storage unit not found.' }
     }
     const [[fromSu]] = await conn.query<RowDataPacket[]>(
-      'SELECT code, label, site_id AS siteId FROM storage_units WHERE id = ?',
+      'SELECT code, label, site_id AS siteId, kind FROM storage_units WHERE id = ?',
       [fromPos.storageUnitId],
     )
     if (!fromSu) {
       await conn.rollback()
       return { ok: false, error: 'Source storage unit not found.' }
+    }
+    if (String(fromSu.kind).toLowerCase() === 'custody' || String(destSu.kind).toLowerCase() === 'custody') {
+      await conn.rollback()
+      return {
+        ok: false,
+        error:
+          'Bulk transfer cannot start or end in a custody bin. Use Assignments to issue or return tracked stock to personnel custody.',
+      }
     }
     if (String(fromSu.siteId) !== String(destSu.siteId)) {
       await conn.rollback()

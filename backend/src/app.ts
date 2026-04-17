@@ -18,6 +18,10 @@ import {
   insertStorageUnit,
   insertSupplier,
   replaceUserPermissions,
+  updateCompany,
+  updateNetworkDevice,
+  updateSite,
+  updateSupplier,
 } from './masterDataWrites.js'
 import { addTaskAttachment, createTask, replaceUserRolesAndOverrides, reviewTask, upsertRoleWithPermissions } from './accessWorkflowWrites.js'
 
@@ -220,6 +224,7 @@ export async function buildApp() {
           orderedAt: String(b.orderedAt ?? ''),
           expectedAt: (b.expectedAt as string | null) ?? null,
           notes: String(b.notes ?? ''),
+          receiveImmediately: Boolean(b.receiveImmediately),
           lines: lines.map((l) => {
             const x = l as Record<string, unknown>
             return {
@@ -251,6 +256,17 @@ export async function buildApp() {
         return insertCompany(pool, String(b.name ?? ''), String(b.notes ?? ''))
       })
 
+      r.patch<{ Params: { id: string } }>('/companies/:id', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'companies', 'edit')
+        const b = req.body as Record<string, unknown>
+        const res = await updateCompany(pool, req.params.id, {
+          name: String(b.name ?? ''),
+          notes: String(b.notes ?? ''),
+        })
+        if (!res.ok) return reply.code(400).send({ error: 'bad_request', message: res.error })
+        return res.company
+      })
+
       r.post('/sites', { preHandler: requireAuth }, async (req, reply) => {
         assertPermission(req.auth!.perms, 'sites', 'create')
         const b = req.body as { companyId?: string; name?: string; location?: string }
@@ -260,6 +276,18 @@ export async function buildApp() {
           const err = e as Error & { statusCode?: number }
           return reply.code(err.statusCode ?? 500).send({ error: 'bad_request', message: err.message })
         }
+      })
+
+      r.patch<{ Params: { id: string } }>('/sites/:id', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'sites', 'edit')
+        const b = req.body as Record<string, unknown>
+        const res = await updateSite(pool, req.params.id, {
+          companyId: String(b.companyId ?? ''),
+          name: String(b.name ?? ''),
+          location: String(b.location ?? ''),
+        })
+        if (!res.ok) return reply.code(400).send({ error: 'bad_request', message: res.error })
+        return res.site
       })
 
       r.post('/personnel', { preHandler: requireAuth }, async (req, reply) => {
@@ -298,6 +326,21 @@ export async function buildApp() {
         }
       })
 
+      r.patch<{ Params: { id: string } }>('/suppliers/:id', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'suppliers', 'edit')
+        const b = req.body as Record<string, unknown>
+        const res = await updateSupplier(pool, req.params.id, {
+          name: String(b.name ?? ''),
+          contactName: String(b.contactName ?? ''),
+          email: String(b.email ?? ''),
+          phone: String(b.phone ?? ''),
+          address: String(b.address ?? ''),
+          notes: String(b.notes ?? ''),
+        })
+        if (!res.ok) return reply.code(400).send({ error: 'bad_request', message: res.error })
+        return res.supplier
+      })
+
       r.post('/products', { preHandler: requireAuth }, async (req, reply) => {
         assertPermission(req.auth!.perms, 'products', 'create')
         const b = req.body as Record<string, string | undefined>
@@ -334,6 +377,21 @@ export async function buildApp() {
           const code = err.statusCode === 409 ? 409 : 400
           return reply.code(code).send({ error: code === 409 ? 'conflict' : 'bad_request', message: err.message })
         }
+      })
+
+      r.patch<{ Params: { id: string } }>('/network-devices/:id', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'network', 'edit')
+        const b = req.body as Record<string, unknown>
+        const res = await updateNetworkDevice(pool, req.params.id, {
+          type: b.type != null ? String(b.type) : undefined,
+          details: b.details != null ? String(b.details) : undefined,
+          brand: b.brand != null ? String(b.brand) : undefined,
+          model: b.model != null ? String(b.model) : undefined,
+          serialNumber: b.serialNumber != null ? String(b.serialNumber) : undefined,
+          location: b.location != null ? String(b.location) : undefined,
+        })
+        if (!res.ok) return reply.code(400).send({ error: 'bad_request', message: res.error })
+        return res.device
       })
 
       r.post('/users', { preHandler: requireAuth }, async (req, reply) => {

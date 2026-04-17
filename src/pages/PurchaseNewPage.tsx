@@ -39,6 +39,7 @@ export function PurchaseNewPage() {
   const [expectedAt, setExpectedAt] = useState<Date | null>(null)
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()])
+  const [receiveImmediately, setReceiveImmediately] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -94,10 +95,19 @@ export function PurchaseNewPage() {
 
   const storageOptions = useMemo(() => {
     if (!siteId) return []
-    return storageUnits
-      .filter((u) => u.siteId === siteId)
+    const atSite = storageUnits.filter((u) => u.siteId === siteId)
+    const warehouse = atSite
+      .filter((u) => u.kind !== 'custody')
       .map((u) => ({ value: u.id, text: `${u.code} — ${u.label}` }))
-  }, [storageUnits, siteId])
+    const custody = atSite
+      .filter((u) => u.kind === 'custody' && u.personnelId)
+      .map((u) => {
+        const p = personnel.find((x) => x.id === u.personnelId)
+        const who = p?.fullName ?? u.personnelId ?? '—'
+        return { value: u.id, text: `Custody: ${u.code} — ${u.label} (${who})` }
+      })
+    return [...custody, ...warehouse]
+  }, [storageUnits, siteId, personnel])
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()])
   const removeLine = (idx: number) => setLines((prev) => prev.filter((_, i) => i !== idx))
@@ -150,6 +160,7 @@ export function PurchaseNewPage() {
       orderedAt: orderedStr,
       expectedAt: expectedStr,
       notes,
+      receiveImmediately,
       lines: normalizedLines,
     })
 
@@ -246,9 +257,29 @@ export function PurchaseNewPage() {
       />
       <TextArea label="Notes" value={notes} height={72} onValueChanged={(e) => setNotes(String(e.value ?? ''))} />
 
+      <p className="form-page__section" style={{ marginTop: '1rem' }}>
+        Receiving
+      </p>
+      <label className="form-page__checkbox-row">
+        <input
+          type="checkbox"
+          checked={receiveImmediately}
+          onChange={(e) => setReceiveImmediately(e.target.checked)}
+        />{' '}
+        Receive into stock immediately (skip the separate receive step). If unchecked, use Receive on the purchase
+        detail page when goods arrive; purchase receive is required for lines that target custody.
+      </label>
+
       <p className="form-page__section" style={{ marginTop: '1.25rem' }}>
         Line items — receipt destination
       </p>
+      {prerequisites ? (
+        <p className="form-page__hint">
+          Each line is where that quantity will post when the purchase is received: site bins for warehouse stock, or a
+          labeled <strong>Custody</strong> row to book goods straight to a holder (same site). Custody posting always
+          happens through purchase receive, not the generic stock-receive screen.
+        </p>
+      ) : null}
       {lines.map((line, idx) => (
         <div
           key={idx}
@@ -271,7 +302,7 @@ export function PurchaseNewPage() {
             onValueChanged={(e) => setLine(idx, { productId: e.value as string | null })}
           />
           <SelectBox
-            label="Receive into storage (this site only)"
+            label="Receive into storage or custody (this site only)"
             dataSource={storageOptions}
             displayExpr="text"
             valueExpr="value"

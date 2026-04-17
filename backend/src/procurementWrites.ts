@@ -1,9 +1,48 @@
-import type { Pool, RowDataPacket } from 'mysql2/promise'
+import type { Pool, PoolConnection, RowDataPacket } from 'mysql2/promise'
 import { nextId } from './id.js'
 import { receiveSerializedInConn, receiveStockInConn } from './inventoryWrites.js'
 
 function fmtLabel(code: string, label: string): string {
   return `${code} (${label})`
+}
+
+/** Caller must hold personnel row FOR UPDATE so concurrent first-time creates serialize per person. */
+async function ensureCustodyStorageUnit(
+  conn: PoolConnection,
+  personnelId: string,
+  siteId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const [existing] = await conn.query<RowDataPacket[]>(
+    'SELECT id FROM storage_units WHERE personnel_id = ? AND LOWER(kind) = ? LIMIT 1 FOR UPDATE',
+    [personnelId, 'custody'],
+  )
+  if (existing.length) return { ok: true }
+
+  const [[p]] = await conn.query<RowDataPacket[]>('SELECT full_name AS fullName FROM personnel WHERE id = ?', [
+    personnelId,
+  ])
+  const name = String(p?.fullName ?? '').trim()
+  const label = name ? `Custody · ${name}` : 'Custody bin'
+  const id = nextId('su')
+  const code = `AUTO-CUST-${id.replace(/^su-/, '')}`.slice(0, 255)
+
+  try {
+    await conn.query(
+      'INSERT INTO storage_units (id, site_id, code, label, kind, personnel_id) VALUES (?,?,?,?,?,?)',
+      [id, siteId, code, label, 'custody', personnelId],
+    )
+  } catch (e) {
+    const err = e as { code?: string }
+    if (err.code === 'ER_DUP_ENTRY') {
+      const [again] = await conn.query<RowDataPacket[]>(
+        'SELECT id FROM storage_units WHERE personnel_id = ? AND LOWER(kind) = ? LIMIT 1',
+        [personnelId, 'custody'],
+      )
+      if (again.length) return { ok: true }
+    }
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not create custody storage unit.' }
+  }
+  return { ok: true }
 }
 
 const MOV_INS = `INSERT INTO inventory_movements (id, product_id, occurred_at, delta, reason, note, ref_assignment_id, ref_asset_id, ref_stock_position_id, purchase_id, personnel_id, correlation_id, from_storage_label, to_storage_label)`
@@ -71,16 +110,10 @@ export async function createAssignmentTx(
     const serializedAssetIdIn = (input.serializedAssetId || '').trim() || null
 
     if (input.source === 'stock') {
-      const [custodyProbe] = await conn.query<RowDataPacket[]>(
-        'SELECT id FROM storage_units WHERE personnel_id = ? AND kind = ? LIMIT 1',
-        [input.personnelId, 'custody'],
-      )
-      if (!custodyProbe.length) {
+      const ensured = await ensureCustodyStorageUnit(conn, input.personnelId, input.siteId)
+      if (!ensured.ok) {
         await conn.rollback()
-        return {
-          ok: false,
-          error: 'Recipient has no custody storage unit. Add a custody bin for this person in storage units.',
-        }
+        return ensured
       }
 
       if (serializedAssetIdIn) {
@@ -112,7 +145,7 @@ export async function createAssignmentTx(
           return { ok: false, error: `Insufficient quantity (available: ${pos.quantity}).` }
         }
         const [[whSite]] = await conn.query<RowDataPacket[]>(
-          'SELECT site_id AS siteId FROM storage_units WHERE id = ?',
+          'SELECT site_id AS siteId, kind FROM storage_units WHERE id = ?',
           [pos.storageUnitId],
         )
         if (!whSite || String(whSite.siteId) !== input.siteId) {
@@ -120,6 +153,14 @@ export async function createAssignmentTx(
           return {
             ok: false,
             error: 'Stock position must be in a storage unit at the selected assignment site.',
+          }
+        }
+        if (String(whSite.kind).toLowerCase() === 'custody') {
+          await conn.rollback()
+          return {
+            ok: false,
+            error:
+              'Bulk stock in a custody bin cannot be reassigned this way. Receive or transfer quantity back to a site warehouse bin first, then assign from there.',
           }
         }
         const [[pr]] = await conn.query<RowDataPacket[]>(
@@ -282,6 +323,7 @@ export async function createAssignmentTx(
       const recipientName = String(pname?.fullName ?? 'recipient')
 
       await conn.query('UPDATE stock_positions SET quantity = quantity - ? WHERE id = ?', [q, input.stockPositionId])
+      await conn.query('DELETE FROM stock_positions WHERE id = ? AND quantity <= 0', [input.stockPositionId])
 
       const [custodyPos] = await conn.query<RowDataPacket[]>(
         'SELECT id FROM stock_positions WHERE product_id = ? AND storage_unit_id = ? FOR UPDATE',
@@ -390,6 +432,90 @@ export type CreatePurchaseBody = {
   expectedAt: string | null
   notes: string
   lines: CreatePurchaseLine[]
+  /** When true, receive all lines into stock/custody in the same transaction (status becomes received). */
+  receiveImmediately?: boolean
+}
+
+/** Apply purchase receive inside an open transaction (purchase row locked FOR UPDATE). */
+async function receivePurchaseIntoStockInConn(
+  conn: PoolConnection,
+  purchaseId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const [[purchase]] = await conn.query<RowDataPacket[]>(
+    'SELECT id, site_id AS siteId, bon_number AS bonNumber, supplier_invoice_ref AS supplierInvoiceRef, status FROM purchases WHERE id = ? FOR UPDATE',
+    [purchaseId],
+  )
+  if (!purchase) {
+    return { ok: false, error: 'Purchase not found.' }
+  }
+  if (String(purchase.status) === 'received') {
+    return { ok: false, error: 'This purchase is already received into stock.' }
+  }
+  if (String(purchase.status) === 'cancelled') {
+    return { ok: false, error: 'Cancelled purchase cannot be received.' }
+  }
+  if (String(purchase.status) !== 'ordered') {
+    return { ok: false, error: 'Only purchases in "ordered" status can be received into stock.' }
+  }
+  const purchaseSiteId = String(purchase.siteId)
+  const [lines] = await conn.query<RowDataPacket[]>(
+    'SELECT id, product_id AS productId, quantity, storage_unit_id AS storageUnitId FROM purchase_lines WHERE purchase_id = ?',
+    [purchaseId],
+  )
+  if (!lines.length) {
+    return { ok: false, error: 'No lines on this purchase.' }
+  }
+
+  for (const line of lines) {
+    const [[su]] = await conn.query<RowDataPacket[]>(
+      'SELECT site_id AS siteId FROM storage_units WHERE id = ?',
+      [line.storageUnitId],
+    )
+    if (!su || String(su.siteId) !== purchaseSiteId) {
+      return {
+        ok: false,
+        error: 'A purchase line targets storage that does not belong to this purchase\'s site.',
+      }
+    }
+  }
+
+  const bon = String(purchase.bonNumber ?? '')
+  const inv = String(purchase.supplierInvoiceRef ?? '').trim()
+  for (const line of lines) {
+    const note = `Bon ${bon}${inv ? ` · Inv ${inv}` : ''} · Purchase ${purchaseId}`
+    const [[pr]] = await conn.query<RowDataPacket[]>(
+      'SELECT tracking_mode AS trackingMode FROM products WHERE id = ?',
+      [line.productId],
+    )
+    const isSerialized = pr && String(pr.trackingMode) === 'serialized'
+    if (isSerialized) {
+      const q = Math.floor(Number(line.quantity))
+      const identifiers = Array.from({ length: q }, (_, i) => `PO-${String(line.id)}-${i + 1}`)
+      const r = await receiveSerializedInConn(conn, {
+        productId: String(line.productId),
+        storageUnitId: String(line.storageUnitId),
+        identifiers,
+        reason: 'Purchase',
+        note,
+        purchaseId,
+      })
+      if (!r.ok) return r
+    } else {
+      const r = await receiveStockInConn(conn, {
+        productId: String(line.productId),
+        storageUnitId: String(line.storageUnitId),
+        quantity: Number(line.quantity),
+        status: 'Available',
+        reason: 'Purchase',
+        note,
+        purchaseId,
+      })
+      if (!r.ok) return r
+    }
+  }
+
+  await conn.query("UPDATE purchases SET status = 'received', received_at = CURDATE() WHERE id = ?", [purchaseId])
+  return { ok: true }
 }
 
 export async function createPurchaseTx(
@@ -451,7 +577,7 @@ export async function createPurchaseTx(
         return { ok: false, error: 'Product not found on a line.' }
       }
       const [[su]] = await conn.query<RowDataPacket[]>(
-        'SELECT id, site_id AS siteId FROM storage_units WHERE id = ?',
+        'SELECT id, site_id AS siteId, kind, personnel_id AS personnelId FROM storage_units WHERE id = ?',
         [line.storageUnitId],
       )
       if (!su) {
@@ -461,6 +587,22 @@ export async function createPurchaseTx(
       if (String(su.siteId) !== input.siteId) {
         await conn.rollback()
         return { ok: false, error: 'Each line storage unit must belong to the purchase site.' }
+      }
+      if (String(su.kind).toLowerCase() === 'custody') {
+        if (!su.personnelId) {
+          await conn.rollback()
+          return { ok: false, error: 'Custody line requires a storage unit with a personnel holder.' }
+        }
+        const [[perRow]] = await conn.query<RowDataPacket[]>('SELECT site_id AS siteId FROM personnel WHERE id = ?', [
+          su.personnelId,
+        ])
+        if (!perRow || String(perRow.siteId) !== input.siteId) {
+          await conn.rollback()
+          return {
+            ok: false,
+            error: 'Custody bin holder must be personnel assigned to the purchase site.',
+          }
+        }
       }
     }
 
@@ -490,6 +632,26 @@ export async function createPurchaseTx(
         [lid, purchaseId, line.productId, Math.floor(line.quantity), line.unitPrice, line.storageUnitId],
       )
     }
+
+    let receivedAt: string | null = null
+    let outStatus = 'ordered'
+    if (input.receiveImmediately) {
+      const rr = await receivePurchaseIntoStockInConn(conn, purchaseId)
+      if (!rr.ok) {
+        await conn.rollback()
+        return rr
+      }
+      const [[prx]] = await conn.query<RowDataPacket[]>(
+        'SELECT received_at AS receivedAt, status FROM purchases WHERE id = ?',
+        [purchaseId],
+      )
+      outStatus = String(prx?.status ?? 'received')
+      if (prx?.receivedAt != null) {
+        const d = prx.receivedAt as Date | string
+        receivedAt = typeof d === 'string' ? d.slice(0, 10) : d.toISOString().slice(0, 10)
+      }
+    }
+
     await conn.commit()
 
     const purchase = {
@@ -501,8 +663,8 @@ export async function createPurchaseTx(
       siteId: input.siteId,
       orderedAt,
       expectedAt,
-      receivedAt: null,
-      status: 'ordered',
+      receivedAt,
+      status: outStatus,
       notes: (input.notes || '').trim(),
     }
     return { ok: true, purchase }
@@ -518,95 +680,11 @@ export async function receivePurchaseTx(pool: Pool, purchaseId: string): Promise
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const [[purchase]] = await conn.query<RowDataPacket[]>(
-      'SELECT id, site_id AS siteId, bon_number AS bonNumber, supplier_invoice_ref AS supplierInvoiceRef, status FROM purchases WHERE id = ? FOR UPDATE',
-      [purchaseId],
-    )
-    if (!purchase) {
+    const r = await receivePurchaseIntoStockInConn(conn, purchaseId)
+    if (!r.ok) {
       await conn.rollback()
-      return { ok: false, error: 'Purchase not found.' }
+      return r
     }
-    if (String(purchase.status) === 'received') {
-      await conn.rollback()
-      return { ok: false, error: 'This purchase is already received into stock.' }
-    }
-    if (String(purchase.status) === 'cancelled') {
-      await conn.rollback()
-      return { ok: false, error: 'Cancelled purchase cannot be received.' }
-    }
-    if (String(purchase.status) !== 'ordered') {
-      await conn.rollback()
-      return { ok: false, error: 'Only purchases in "ordered" status can be received into stock.' }
-    }
-    const purchaseSiteId = String(purchase.siteId)
-    const [lines] = await conn.query<RowDataPacket[]>(
-      'SELECT id, product_id AS productId, quantity, storage_unit_id AS storageUnitId FROM purchase_lines WHERE purchase_id = ?',
-      [purchaseId],
-    )
-    if (!lines.length) {
-      await conn.rollback()
-      return { ok: false, error: 'No lines on this purchase.' }
-    }
-
-    for (const line of lines) {
-      const [[su]] = await conn.query<RowDataPacket[]>(
-        'SELECT site_id AS siteId FROM storage_units WHERE id = ?',
-        [line.storageUnitId],
-      )
-      if (!su || String(su.siteId) !== purchaseSiteId) {
-        await conn.rollback()
-        return {
-          ok: false,
-          error: 'A purchase line targets storage that does not belong to this purchase\'s site.',
-        }
-      }
-    }
-
-    const bon = String(purchase.bonNumber ?? '')
-    const inv = String(purchase.supplierInvoiceRef ?? '').trim()
-    for (const line of lines) {
-      const note = `Bon ${bon}${inv ? ` · Inv ${inv}` : ''} · Purchase ${purchaseId}`
-      const [[pr]] = await conn.query<RowDataPacket[]>(
-        'SELECT tracking_mode AS trackingMode FROM products WHERE id = ?',
-        [line.productId],
-      )
-      const isSerialized = pr && String(pr.trackingMode) === 'serialized'
-      if (isSerialized) {
-        const q = Math.floor(Number(line.quantity))
-        const identifiers = Array.from({ length: q }, (_, i) => `PO-${String(line.id)}-${i + 1}`)
-        const r = await receiveSerializedInConn(conn, {
-          productId: String(line.productId),
-          storageUnitId: String(line.storageUnitId),
-          identifiers,
-          reason: 'Purchase',
-          note,
-          purchaseId,
-        })
-        if (!r.ok) {
-          await conn.rollback()
-          return r
-        }
-      } else {
-        const r = await receiveStockInConn(conn, {
-          productId: String(line.productId),
-          storageUnitId: String(line.storageUnitId),
-          quantity: Number(line.quantity),
-          status: 'Available',
-          reason: 'Purchase',
-          note,
-          purchaseId,
-        })
-        if (!r.ok) {
-          await conn.rollback()
-          return r
-        }
-      }
-    }
-
-    await conn.query(
-      "UPDATE purchases SET status = 'received', received_at = CURDATE() WHERE id = ?",
-      [purchaseId],
-    )
     await conn.commit()
     return { ok: true }
   } catch (e) {

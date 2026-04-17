@@ -17,6 +17,8 @@ import type {
   PurchaseLineDetailRow,
   PurchaseListRow,
   ReceiveStockInput,
+  RolePermissionRow,
+  RoleRow,
   SerializedAsset,
   Site,
   StockOverviewRow,
@@ -25,9 +27,35 @@ import type {
   StorageUnit,
   StorageUnitStockRow,
   Supplier,
+  TaskAttachmentRow,
+  TaskRecord,
   TransferStockInput,
   UserEquipment,
+  UserRoleRow,
 } from '@/mocks/domain/types'
+import { fullPermissionsMap } from '@/auth/pageKeys'
+import type { AssetRow, Ticket } from '@/mocks/types'
+import assetsSeed from '@/mocks/assets.json'
+import ticketsSeed from '@/mocks/tickets.json'
+
+function demoPortalUsers(): PortalUser[] {
+  return [
+    {
+      id: 'mock-user-1',
+      displayName: 'Demo Assignee',
+      login: 'demo1',
+      permissions: fullPermissionsMap(),
+      roleIds: [],
+    },
+    {
+      id: 'mock-user-2',
+      displayName: 'Demo Reviewer',
+      login: 'demo2',
+      permissions: fullPermissionsMap(),
+      roleIds: [],
+    },
+  ]
+}
 
 export type StoreState = {
   companies: Company[]
@@ -46,6 +74,15 @@ export type StoreState = {
   suppliers: Supplier[]
   purchases: Purchase[]
   purchaseLines: PurchaseLine[]
+  tasks: TaskRecord[]
+  taskAttachments: TaskAttachmentRow[]
+  roles: RoleRow[]
+  rolePermissions: RolePermissionRow[]
+  userRoles: UserRoleRow[]
+  /** Service desk grid (no DB table; persisted in mock store only). */
+  serviceDeskTickets: Ticket[]
+  /** IT asset register grid (no DB table; persisted in mock store only). */
+  inventoryAssets: AssetRow[]
 }
 
 export function formatStorageUnitLabel(u: StorageUnit | undefined): string {
@@ -64,8 +101,8 @@ function stripZeroStockPositions(rows: StockPosition[]): StockPosition[] {
   return rows.filter((p) => p.quantity > 0)
 }
 
-/** Empty in-memory store; signed-in API bootstrap supplies real data. */
-function emptyStore(): StoreState {
+/** Empty shape used for defaults and error fallbacks. */
+export function emptyStore(): StoreState {
   return {
     companies: [],
     sites: [],
@@ -83,15 +120,62 @@ function emptyStore(): StoreState {
     suppliers: [],
     purchases: [],
     purchaseLines: [],
+    tasks: [],
+    taskAttachments: [],
+    roles: [],
+    rolePermissions: [],
+    userRoles: [],
+    serviceDeskTickets: [],
+    inventoryAssets: [],
   }
 }
 
-let memState: StoreState = emptyStore()
+/** Merge partial API bootstrap into a full `StoreState` (missing keys default to empty arrays). */
+export function normalizeBootstrapState(s: Partial<StoreState> | null): StoreState {
+  const e = emptyStore()
+  if (!s) return e
+  return {
+    companies: s.companies ?? e.companies,
+    sites: s.sites ?? e.sites,
+    personnel: s.personnel ?? e.personnel,
+    storageUnits: s.storageUnits ?? e.storageUnits,
+    products: s.products ?? e.products,
+    stockPositions: s.stockPositions ?? e.stockPositions,
+    productMovements: s.productMovements ?? e.productMovements,
+    productReports: s.productReports ?? e.productReports,
+    assignments: s.assignments ?? e.assignments,
+    serializedAssets: s.serializedAssets ?? e.serializedAssets,
+    userEquipment: s.userEquipment ?? e.userEquipment,
+    networkDevices: s.networkDevices ?? e.networkDevices,
+    users: s.users ?? e.users,
+    suppliers: s.suppliers ?? e.suppliers,
+    purchases: s.purchases ?? e.purchases,
+    purchaseLines: s.purchaseLines ?? e.purchaseLines,
+    tasks: s.tasks ?? e.tasks,
+    taskAttachments: s.taskAttachments ?? e.taskAttachments,
+    roles: s.roles ?? e.roles,
+    rolePermissions: s.rolePermissions ?? e.rolePermissions,
+    userRoles: s.userRoles ?? e.userRoles,
+    serviceDeskTickets: s.serviceDeskTickets ?? e.serviceDeskTickets,
+    inventoryAssets: s.inventoryAssets ?? e.inventoryAssets,
+  }
+}
+
+function seededOfflineStore(): StoreState {
+  return {
+    ...emptyStore(),
+    users: demoPortalUsers(),
+    serviceDeskTickets: [...(ticketsSeed as Ticket[])],
+    inventoryAssets: [...(assetsSeed as AssetRow[])],
+  }
+}
+
+let memState: StoreState = seededOfflineStore()
 /** When API mode loads bootstrap JSON, reads use this snapshot until the next refetch. */
 let liveSnapshot: StoreState | null = null
 
 export function setLiveSnapshot(s: StoreState | null) {
-  liveSnapshot = s
+  liveSnapshot = s ? normalizeBootstrapState(s) : null
   emit()
 }
 
@@ -200,11 +284,23 @@ export function receiveStock(input: ReceiveStockInput): { ok: true } | { ok: fal
       error: 'Serialized products must be received with identifiers (receive-serialized API or mock extension).',
     }
   }
-  if (!active().storageUnits.some((u) => u.id === input.storageUnitId)) {
+  const targetSu = active().storageUnits.find((u) => u.id === input.storageUnitId)
+  if (!targetSu) {
     return { ok: false, error: 'Storage unit not found.' }
   }
+  const isCustody = targetSu.kind === 'custody'
+  if (isCustody && !input.purchaseId) {
+    return {
+      ok: false,
+      error:
+        'Cannot receive into a custody bin without a purchase. Receive into a warehouse or shelf unit, or receive via a purchase line to this custody bin.',
+    }
+  }
+  if (isCustody && !targetSu.personnelId) {
+    return { ok: false, error: 'Custody storage unit has no personnel holder.' }
+  }
 
-  const status = input.status.trim() || 'Available'
+  const status = isCustody ? 'Issued' : input.status.trim() || 'Available'
   const note = input.note.trim()
 
   setState((s) => {
@@ -246,9 +342,92 @@ export function receiveStock(input: ReceiveStockInput): { ok: true } | { ok: fal
         note: note || 'Inbound receive',
         fromStorageLabel: '—',
         toStorageLabel: toLabel,
+        personnelId: isCustody && targetSu.personnelId ? targetSu.personnelId : undefined,
       },
       ...s.productMovements,
     ]
+  })
+
+  return { ok: true }
+}
+
+export type ReceiveSerializedStockInput = {
+  productId: string
+  storageUnitId: string
+  identifiers: string[]
+  reason: string
+  note: string
+  purchaseId?: string | null
+}
+
+/** Inbound serialized units (MAC/serial); custody allowed when purchaseId is set (PO receive). */
+export function receiveSerializedStock(
+  input: ReceiveSerializedStockInput,
+): { ok: true } | { ok: false; error: string } {
+  const ids = (input.identifiers || []).map((s) => s.trim()).filter((s) => s.length > 0)
+  if (ids.length < 1) return { ok: false, error: 'At least one serial number or MAC is required.' }
+  const prod = active().products.find((p) => p.id === input.productId)
+  if (!prod) return { ok: false, error: 'Product not found.' }
+  if (prod.trackingMode !== 'serialized') {
+    return { ok: false, error: 'This product is not configured for serialized tracking.' }
+  }
+  const su = active().storageUnits.find((u) => u.id === input.storageUnitId)
+  if (!su) return { ok: false, error: 'Storage unit not found.' }
+  const isCustody = su.kind === 'custody'
+  if (isCustody && !input.purchaseId) {
+    return {
+      ok: false,
+      error:
+        'Cannot receive serialized assets into a custody bin without a purchase. Receive into site storage, or use a purchase line to this custody bin.',
+    }
+  }
+  if (isCustody && !su.personnelId) {
+    return { ok: false, error: 'Custody storage unit has no personnel holder.' }
+  }
+  const siteId = su.siteId
+  const toLabel = formatStorageUnitLabel(su)
+  const reason = `receive:${input.reason}`
+  const note = (input.note || '').trim() || 'Serialized receive'
+  const assetStatus = isCustody ? 'Issued' : 'Available'
+
+  for (const identifier of ids) {
+    if (active().serializedAssets.some((a) => a.identifier === identifier)) {
+      return { ok: false, error: `Duplicate identifier: ${identifier}` }
+    }
+  }
+
+  setState((s) => {
+    const newAssets: SerializedAsset[] = []
+    const newMovs: ProductMovement[] = []
+    for (const identifier of ids) {
+      const assetId = nextId('ast')
+      newAssets.push({
+        id: assetId,
+        productId: input.productId,
+        identifier,
+        siteId,
+        storageUnitId: input.storageUnitId,
+        status: assetStatus,
+        createdAt: new Date().toISOString(),
+      })
+      newMovs.push({
+        id: nextId('mov'),
+        productId: input.productId,
+        at: new Date().toISOString(),
+        delta: 1,
+        reason,
+        refAssignmentId: null,
+        refAssetId: assetId,
+        refStockPositionId: null,
+        refPurchaseId: input.purchaseId ?? null,
+        note,
+        fromStorageLabel: '—',
+        toStorageLabel: toLabel,
+        personnelId: isCustody && su.personnelId ? su.personnelId : undefined,
+      })
+    }
+    s.serializedAssets = [...newAssets, ...s.serializedAssets]
+    s.productMovements = [...newMovs, ...s.productMovements]
   })
 
   return { ok: true }
@@ -275,13 +454,6 @@ export function createAssignment(input: CreateAssignmentInput): CreateAssignment
   const serializedIn = (input.serializedAssetId || '').trim() || null
 
   if (input.source === 'stock') {
-    const custodySu = active().storageUnits.find((u) => u.personnelId === input.personnelId && u.kind === 'custody')
-    if (!custodySu) {
-      return {
-        ok: false,
-        error: 'Recipient has no custody storage unit. Add a custody bin for this person in storage units.',
-      }
-    }
     if (serializedIn) {
       if (Math.floor(input.quantity) !== 1) {
         return { ok: false, error: 'Serialized assignment quantity must be 1.' }
@@ -302,6 +474,13 @@ export function createAssignment(input: CreateAssignmentInput): CreateAssignment
         return {
           ok: false,
           error: 'Stock position must be in a storage unit at the selected assignment site.',
+        }
+      }
+      if (fromStorage?.kind === 'custody') {
+        return {
+          ok: false,
+          error:
+            'Stock already in a custody bin cannot be bulk-assigned again. Move quantity back to a warehouse bin first, or use serialized assets for individual units.',
         }
       }
       const pr = active().products.find((p) => p.id === active().stockPositions[idx].productId)
@@ -334,6 +513,23 @@ export function createAssignment(input: CreateAssignmentInput): CreateAssignment
   }
 
   setState((s) => {
+    if (input.source === 'stock') {
+      const hasCustody = s.storageUnits.some((u) => u.personnelId === input.personnelId && u.kind === 'custody')
+      if (!hasCustody) {
+        const sid = nextId('su')
+        s.storageUnits = [
+          {
+            id: sid,
+            siteId: input.siteId,
+            code: `AUTO-CUST-${sid.replace(/^su-/, '').slice(-14)}`,
+            label: `Custody · ${per.fullName}`,
+            kind: 'custody',
+            personnelId: input.personnelId,
+          },
+          ...s.storageUnits,
+        ]
+      }
+    }
     s.assignments = [assignment, ...s.assignments]
     if (input.source === 'stock' && serializedIn) {
       const custodySu = s.storageUnits.find((u) => u.personnelId === input.personnelId && u.kind === 'custody')
@@ -488,6 +684,17 @@ export function transferStock(input: TransferStockInput): TransferStockResult {
     return { ok: false, error: 'Serialized products are moved as individual assets, not bulk transfer.' }
   }
   const fromSu = active().storageUnits.find((u) => u.id === fromPos.storageUnitId)
+  if (!fromSu) return { ok: false, error: 'Source storage unit not found.' }
+  if (fromSu.kind === 'custody' || destSu.kind === 'custody') {
+    return {
+      ok: false,
+      error:
+        'Bulk transfer cannot start or end in a custody bin. Use Assignments to issue stock to a person’s custody, or receive into a warehouse bin first.',
+    }
+  }
+  if (fromSu.siteId !== destSu.siteId) {
+    return { ok: false, error: 'Source and destination storage must be at the same site.' }
+  }
   const fromLabel = formatStorageUnitLabel(fromSu)
   const toLabel = formatStorageUnitLabel(destSu)
   const productId = fromPos.productId
@@ -792,6 +999,18 @@ export function createPurchase(input: CreatePurchaseInput): CreatePurchaseResult
     if (su.siteId !== input.siteId) {
       return { ok: false, error: 'Each line storage unit must belong to the purchase site.' }
     }
+    if (su.kind === 'custody') {
+      if (!su.personnelId) {
+        return { ok: false, error: 'Custody line requires a storage unit with a personnel holder.' }
+      }
+      const holder = active().personnel.find((p) => p.id === su.personnelId)
+      if (!holder || holder.siteId !== input.siteId) {
+        return {
+          ok: false,
+          error: 'Custody bin holder must be personnel assigned to the purchase site.',
+        }
+      }
+    }
   }
 
   const purchase: Purchase = {
@@ -822,6 +1041,15 @@ export function createPurchase(input: CreatePurchaseInput): CreatePurchaseResult
     s.purchaseLines = [...newLines, ...s.purchaseLines]
   })
 
+  if (input.receiveImmediately) {
+    const rr = receivePurchase(purchase.id)
+    if (!rr.ok) {
+      return { ok: false, error: rr.error }
+    }
+    const updated = active().purchases.find((p) => p.id === purchase.id)
+    return { ok: true, purchase: updated ?? purchase }
+  }
+
   return { ok: true, purchase }
 }
 
@@ -846,16 +1074,32 @@ export function receivePurchase(purchaseId: string): ReceivePurchaseResult {
     const note = `Bon ${purchase.bonNumber}${
       purchase.supplierInvoiceRef ? ` · Inv ${purchase.supplierInvoiceRef}` : ''
     } · Purchase ${purchase.id}`
-    const res = receiveStock({
-      productId: line.productId,
-      storageUnitId: line.storageUnitId,
-      quantity: line.quantity,
-      status: 'Available',
-      reason: 'Purchase',
-      note,
-      purchaseId: purchase.id,
-    })
-    if (!res.ok) return res
+    const pr = active().products.find((p) => p.id === line.productId)
+    const isSerialized = pr?.trackingMode === 'serialized'
+    if (isSerialized) {
+      const q = Math.floor(line.quantity)
+      const identifiers = Array.from({ length: q }, (_, i) => `PO-${String(line.id).slice(-8)}-${i + 1}`)
+      const res = receiveSerializedStock({
+        productId: line.productId,
+        storageUnitId: line.storageUnitId,
+        identifiers,
+        reason: 'Purchase',
+        note,
+        purchaseId: purchase.id,
+      })
+      if (!res.ok) return res
+    } else {
+      const res = receiveStock({
+        productId: line.productId,
+        storageUnitId: line.storageUnitId,
+        quantity: line.quantity,
+        status: 'Available',
+        reason: 'Purchase',
+        note,
+        purchaseId: purchase.id,
+      })
+      if (!res.ok) return res
+    }
   }
 
   const receivedDay = new Date().toISOString().slice(0, 10)
@@ -950,9 +1194,217 @@ export function getStorageUnitsForProduct(productId: string) {
     })
 }
 
+const TASK_ATTACHMENT_MIMES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'text/plain'])
+const MAX_TASK_ATTACHMENT_BYTES = 5 * 1024 * 1024
+
+export function mockCreateTask(input: {
+  title: string
+  description: string
+  assignedToUserId: string
+  reviewerUserId: string | null
+  dueDate: string | null
+  createdByUserId: string
+}): { ok: true; taskId: string } | { ok: false; error: string } {
+  const title = input.title.trim()
+  if (!title) return { ok: false, error: 'Title is required.' }
+  const assignee = input.assignedToUserId.trim()
+  if (!assignee) return { ok: false, error: 'Assignee is required.' }
+  if (!active().users.some((u) => u.id === assignee)) return { ok: false, error: 'Assignee user not found.' }
+  const createdBy = input.createdByUserId.trim()
+  if (!createdBy) return { ok: false, error: 'Created-by user is required.' }
+  if (!active().users.some((u) => u.id === createdBy)) return { ok: false, error: 'Created-by user not found.' }
+  if (input.reviewerUserId) {
+    const rv = input.reviewerUserId.trim()
+    if (rv && !active().users.some((u) => u.id === rv)) return { ok: false, error: 'Reviewer user not found.' }
+  }
+  const id = nextId('tsk')
+  const now = new Date().toISOString()
+  const row: TaskRecord = {
+    id,
+    title,
+    description: (input.description || '').trim(),
+    status: 'pending_review',
+    createdByUserId: createdBy,
+    assignedToUserId: assignee,
+    reviewerUserId: input.reviewerUserId?.trim() || null,
+    dueDate: input.dueDate,
+    reviewedAt: null,
+    createdAt: now,
+  }
+  setState((s) => {
+    s.tasks = [row, ...s.tasks]
+  })
+  return { ok: true, taskId: id }
+}
+
+export function mockReviewTask(input: {
+  taskId: string
+  reviewerUserId: string
+  decision: 'approved' | 'changes_requested'
+  comment?: string
+}): { ok: true } | { ok: false; error: string } {
+  const t = active().tasks.find((x) => x.id === input.taskId)
+  if (!t) return { ok: false, error: 'Task not found.' }
+  if (t.reviewerUserId && t.reviewerUserId !== input.reviewerUserId) {
+    return { ok: false, error: 'Only assigned reviewer can review this task.' }
+  }
+  setState((s) => {
+    const idx = s.tasks.findIndex((x) => x.id === input.taskId)
+    if (idx < 0) return
+    s.tasks[idx] = {
+      ...s.tasks[idx],
+      status: input.decision,
+      reviewerUserId: input.reviewerUserId,
+      reviewedAt: new Date().toISOString(),
+    }
+  })
+  return { ok: true }
+}
+
+export function mockAddTaskAttachment(input: {
+  taskId: string
+  uploadedByUserId: string
+  filename: string
+  mimeType: string
+  contentBase64: string
+}): { ok: true } | { ok: false; error: string } {
+  const mime = input.mimeType.trim().toLowerCase()
+  if (!TASK_ATTACHMENT_MIMES.has(mime)) return { ok: false, error: 'Unsupported file type.' }
+  let size = 0
+  try {
+    const bin = atob(input.contentBase64)
+    size = bin.length
+  } catch {
+    return { ok: false, error: 'Invalid attachment encoding.' }
+  }
+  if (!size) return { ok: false, error: 'Empty attachment.' }
+  if (size > MAX_TASK_ATTACHMENT_BYTES) return { ok: false, error: 'Attachment too large (max 5MB).' }
+  if (!active().tasks.some((t) => t.id === input.taskId)) return { ok: false, error: 'Task not found.' }
+  if (!active().users.some((u) => u.id === input.uploadedByUserId)) return { ok: false, error: 'User not found.' }
+  const id = nextId('att')
+  setState((s) => {
+    s.taskAttachments = [
+      {
+        id,
+        taskId: input.taskId,
+        uploadedByUserId: input.uploadedByUserId,
+        filename: input.filename,
+        mimeType: mime,
+        sizeBytes: size,
+        createdAt: new Date().toISOString(),
+      },
+      ...s.taskAttachments,
+    ]
+  })
+  return { ok: true }
+}
+
+export function updateCompany(rowId: string, name: string, notes = ''): { ok: true } | { ok: false; error: string } {
+  const nm = name.trim()
+  if (!nm) return { ok: false, error: 'Name is required.' }
+  const exists = active().companies.some((c) => c.id === rowId)
+  if (!exists) return { ok: false, error: 'Company not found.' }
+  setState((s) => {
+    s.companies = s.companies.map((c) => (c.id === rowId ? { ...c, name: nm, notes: notes.trim() } : c))
+  })
+  return { ok: true }
+}
+
+export function updateSite(
+  rowId: string,
+  input: { companyId: string; name: string; location: string },
+): { ok: true } | { ok: false; error: string } {
+  if (!active().companies.some((c) => c.id === input.companyId)) return { ok: false, error: 'Company not found.' }
+  const nm = input.name.trim()
+  if (!nm) return { ok: false, error: 'Site name is required.' }
+  const exists = active().sites.some((x) => x.id === rowId)
+  if (!exists) return { ok: false, error: 'Site not found.' }
+  setState((s) => {
+    s.sites = s.sites.map((x) =>
+      x.id === rowId ? { ...x, companyId: input.companyId, name: nm, location: (input.location || '').trim() } : x,
+    )
+  })
+  return { ok: true }
+}
+
+export function updateSupplier(
+  rowId: string,
+  input: {
+    name: string
+    contactName: string
+    email: string
+    phone: string
+    address: string
+    notes: string
+  },
+): { ok: true } | { ok: false; error: string } {
+  const nm = input.name.trim()
+  if (!nm) return { ok: false, error: 'Supplier name is required.' }
+  const exists = active().suppliers.some((x) => x.id === rowId)
+  if (!exists) return { ok: false, error: 'Supplier not found.' }
+  setState((s) => {
+    s.suppliers = s.suppliers.map((x) =>
+      x.id === rowId
+        ? {
+            ...x,
+            name: nm,
+            contactName: (input.contactName || '').trim(),
+            email: (input.email || '').trim(),
+            phone: (input.phone || '').trim(),
+            address: (input.address || '').trim(),
+            notes: (input.notes || '').trim(),
+          }
+        : x,
+    )
+  })
+  return { ok: true }
+}
+
+export function updateNetworkDevice(
+  rowId: string,
+  input: Partial<Pick<NetworkDevice, 'type' | 'details' | 'brand' | 'model' | 'serialNumber' | 'location'>>,
+): { ok: true } | { ok: false; error: string } {
+  const exists = active().networkDevices.some((d) => d.id === rowId)
+  if (!exists) return { ok: false, error: 'Device not found.' }
+  setState((s) => {
+    s.networkDevices = s.networkDevices.map((d) =>
+      d.id === rowId
+        ? {
+            ...d,
+            type: input.type != null ? String(input.type) : d.type,
+            details: input.details != null ? String(input.details) : d.details,
+            brand: input.brand != null ? String(input.brand) : d.brand,
+            model: input.model != null ? String(input.model) : d.model,
+            serialNumber: input.serialNumber != null ? String(input.serialNumber) : d.serialNumber,
+            location: input.location != null ? String(input.location) : d.location,
+          }
+        : d,
+    )
+  })
+  return { ok: true }
+}
+
+export function updateServiceDeskTicket(rowId: string, patch: Partial<Ticket>): { ok: true } | { ok: false; error: string } {
+  const exists = active().serviceDeskTickets.some((t) => t.id === rowId)
+  if (!exists) return { ok: false, error: 'Ticket not found.' }
+  setState((s) => {
+    s.serviceDeskTickets = s.serviceDeskTickets.map((t) => (t.id === rowId ? { ...t, ...patch } : t))
+  })
+  return { ok: true }
+}
+
+export function updateInventoryAsset(rowId: string, patch: Partial<AssetRow>): { ok: true } | { ok: false; error: string } {
+  const exists = active().inventoryAssets.some((a) => a.id === rowId)
+  if (!exists) return { ok: false, error: 'Asset not found.' }
+  setState((s) => {
+    s.inventoryAssets = s.inventoryAssets.map((a) => (a.id === rowId ? { ...a, ...patch } : a))
+  })
+  return { ok: true }
+}
+
 /** Dev / tests: reset in-memory state to seeds. */
 export function resetMockStore() {
-  memState = emptyStore()
+  memState = seededOfflineStore()
   liveSnapshot = null
   emit()
 }

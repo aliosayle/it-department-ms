@@ -32,7 +32,10 @@ export function StockReceivePage() {
   )
 
   const storageOptions = useMemo(
-    () => storageUnits.map((u) => ({ value: u.id, text: `${u.code} — ${u.label}` })),
+    () =>
+      storageUnits
+        .filter((u) => u.kind !== 'custody')
+        .map((u) => ({ value: u.id, text: `${u.code} — ${u.label}` })),
     [storageUnits],
   )
 
@@ -67,8 +70,9 @@ export function StockReceivePage() {
     <div className="form-page form-page--wide">
       {error ? <p className="form-page__error">{error}</p> : null}
       <p className="form-page__hint">
-        Records inbound quantity against a storage location and updates the inventory ledger. For
-        supplier shipments with a delivery note (bon), use{' '}
+        Records inbound quantity against a storage location and updates the inventory ledger. Custody bins are
+        excluded — receive into warehouse storage, then use <Link to="/assignments/new">Assignments</Link> to issue to
+        personnel. For supplier shipments with a delivery note (bon), use{' '}
         <Link to="/purchases">Purchases</Link> to receive lines so movements stay tied to the order.{' '}
         <Link to="/master-data/suppliers">Suppliers</Link>.
       </p>

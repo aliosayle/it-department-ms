@@ -51,6 +51,20 @@
   margin-top: 0.25rem;
 }
 
+.form-page__checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.form-page__checkbox-row input {
+  margin-top: 0.2rem;
+}
+
 .list-toolbar {
   display: flex;
   align-items: center;

@@ -221,6 +221,8 @@ export type CreatePurchaseInput = {
   expectedAt: string | null
   notes: string
   lines: CreatePurchaseLineInput[]
+  /** When true, receive lines into stock/custody immediately after creating the purchase. */
+  receiveImmediately?: boolean
 }
 
 export type PurchaseListRow = Purchase & {
@@ -327,4 +329,52 @@ export type MovementStatementRow = {
   refStockPositionId: string | null
   refPurchaseId: string | null
   correlationId?: string
+}
+
+export type TaskStatus = 'pending_review' | 'approved' | 'changes_requested'
+
+/** Task row aligned with `/bootstrap` and MariaDB `tasks`. */
+export type TaskRecord = {
+  id: string
+  title: string
+  description: string
+  status: TaskStatus | string
+  createdByUserId: string
+  assignedToUserId: string
+  reviewerUserId: string | null
+  dueDate: string | null
+  reviewedAt: string | null
+  createdAt: string
+}
+
+export type TaskAttachmentRow = {
+  id: string
+  taskId: string
+  uploadedByUserId: string
+  filename: string
+  mimeType: string
+  sizeBytes: number
+  createdAt: string
+}
+
+export type RoleRow = {
+  id: string
+  name: string
+  description: string
+  isSystem?: boolean
+}
+
+/** Raw role_page_permissions row from bootstrap (cv/ce/cd/cc aliases). */
+export type RolePermissionRow = {
+  roleId: string
+  pageKey: string
+  cv?: number | boolean
+  ce?: number | boolean
+  cd?: number | boolean
+  cc?: number | boolean
+}
+
+export type UserRoleRow = {
+  userId: string
+  roleId: string
 }

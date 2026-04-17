@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import Button from 'devextreme-react/button'
 import TextBox from 'devextreme-react/text-box'
 import { useCan } from '@/auth/AuthContext'
 import { portalUpdateCompany } from '@/api/mutations'
+import { DefinitionList, DlRow } from '@/components/forms/DefinitionList'
+import { EntityFormPage } from '@/components/forms/EntityFormPage'
 import { useMockStore } from '@/mocks/mockStore'
-import './formPage.css'
+import '@/pages/formPage.css'
 
 export function CompanyEditPage() {
   const { companyId = '' } = useParams<{ companyId: string }>()
@@ -13,15 +15,20 @@ export function CompanyEditPage() {
   const { companies } = useMockStore()
   const perm = useCan('companies')
   const row = companies.find((c) => c.id === companyId)
+  const [mode, setMode] = useState<'view' | 'edit'>('view')
   const [name, setName] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const resetDraft = useCallback(() => {
     if (!row) return
     setName(row.name)
     setNotes(row.notes ?? '')
   }, [row])
+
+  useEffect(() => {
+    resetDraft()
+  }, [resetDraft])
 
   const submit = async () => {
     setError(null)
@@ -38,33 +45,71 @@ export function CompanyEditPage() {
       setError(r.error)
       return
     }
-    navigate('/master-data/companies')
+    setMode('view')
   }
 
   if (!row) {
     return (
-      <div className="form-page">
+      <EntityFormPage
+        title="Company"
+        subtitle="No company matches this link."
+        toolbar={<Button text="Back to list" onClick={() => navigate('/master-data/companies')} />}
+      >
         <p className="form-page__error">Company not found.</p>
-        <Button text="Back" onClick={() => navigate('/master-data/companies')} />
-      </div>
+      </EntityFormPage>
     )
   }
 
-  return (
-    <div className="form-page">
-      {error ? <p className="form-page__error">{error}</p> : null}
-      <TextBox label="Name" value={name} onValueChanged={(e) => setName(String(e.value ?? ''))} />
-      <TextBox label="Notes" value={notes} onValueChanged={(e) => setNotes(String(e.value ?? ''))} />
-      <div className="form-page__actions">
+  const toolbar =
+    mode === 'view' ? (
+      <>
+        <Button text="Back to list" onClick={() => navigate('/master-data/companies')} />
+        {perm.edit ? (
+          <Button
+            text="Edit"
+            type="default"
+            stylingMode="contained"
+            onClick={() => {
+              setError(null)
+              resetDraft()
+              setMode('edit')
+            }}
+          />
+        ) : null}
+      </>
+    ) : (
+      <>
         <Button
-          text="Save"
-          type="default"
-          stylingMode="contained"
-          disabled={!perm.edit}
-          onClick={() => void submit()}
+          text="Cancel"
+          onClick={() => {
+            setError(null)
+            resetDraft()
+            setMode('view')
+          }}
         />
-        <Button text="Cancel" onClick={() => navigate('/master-data/companies')} />
-      </div>
-    </div>
+        <Button text="Save" type="default" stylingMode="contained" disabled={!perm.edit} onClick={() => void submit()} />
+      </>
+    )
+
+  return (
+    <EntityFormPage
+      title={mode === 'view' ? 'Company' : 'Edit company'}
+      subtitle={mode === 'view' ? 'Master data record.' : 'Update the legal entity name and internal notes.'}
+      breadcrumbs={<Link to="/master-data/companies">Companies</Link>}
+      toolbar={toolbar}
+      error={error}
+    >
+      {mode === 'view' ? (
+        <DefinitionList>
+          <DlRow label="Name" value={row.name} />
+          <DlRow label="Notes" value={row.notes} />
+        </DefinitionList>
+      ) : (
+        <div className="entity-form-page__body entity-form-page__body--fields">
+          <TextBox label="Name" value={name} onValueChanged={(e) => setName(String(e.value ?? ''))} />
+          <TextBox label="Notes" value={notes} onValueChanged={(e) => setNotes(String(e.value ?? ''))} />
+        </div>
+      )}
+    </EntityFormPage>
   )
 }

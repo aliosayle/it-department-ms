@@ -7,8 +7,9 @@ import { useCan } from '@/auth/AuthContext'
 import { portalAddProduct } from '@/api/mutations'
 import { usePortalBootstrap } from '@/api/usePortalBootstrap'
 import { renderBootstrapGate } from '@/components/portal/BootstrapStatus'
+import { EntityFormPage } from '@/components/forms/EntityFormPage'
 import type { ProductTrackingMode } from '@/mocks/domain/types'
-import './formPage.css'
+import '@/pages/formPage.css'
 
 const trackingOptions = [
   { value: 'quantity' as const, text: 'Quantity (bulk stock)' },
@@ -58,44 +59,48 @@ export function ProductNewPage() {
   if (gate) return gate
 
   return (
-    <div className="form-page form-page--wide">
-      <h1 style={{ marginTop: 0 }}>New product</h1>
-      {error ? <p className="form-page__error">{error}</p> : null}
-      <p className="form-page__hint">
-        <Link to="/products">Products</Link> · <strong>Reference</strong> is your stable catalog code (unique).{' '}
-        <strong>SKU</strong> is optional (vendor part number). Serialized products are received with MAC/serial via{' '}
-        <code>POST /api/v1/inventory/receive-serialized</code> or purchase receive (auto placeholders per line qty).
-        After saving, use <Link to="/stock/receive">Receive stock</Link> or <Link to="/purchases">Purchases</Link> for
-        quantity items.
+    <EntityFormPage
+      title="New product"
+      subtitle="Add a SKU to the catalog before receiving stock or recording purchases."
+      breadcrumbs={<Link to="/products">Products</Link>}
+      toolbar={<Button text="Cancel" onClick={() => navigate('/products')} />}
+      error={error}
+      wide
+    >
+      <p className="form-page__hint" style={{ margin: 0 }}>
+        <strong>Reference</strong> is your stable catalog code (unique). <strong>SKU</strong> is optional (vendor part
+        number). Serialized products use MAC/serial receive or purchase receive. After saving, use{' '}
+        <Link to="/stock/receive">Receive stock</Link> or <Link to="/purchases">Purchases</Link> for quantity items.
       </p>
-      <TextBox
-        label="Reference (required, unique)"
-        value={reference}
-        onValueChanged={(e) => setReference(String(e.value ?? ''))}
-      />
-      <TextBox label="SKU (optional)" value={sku} onValueChanged={(e) => setSku(String(e.value ?? ''))} />
-      <TextBox label="Name" value={name} onValueChanged={(e) => setName(String(e.value ?? ''))} />
-      <SelectBox
-        label="Tracking mode"
-        dataSource={trackingOptions}
-        displayExpr="text"
-        valueExpr="value"
-        value={trackingMode}
-        onValueChanged={(e) => setTrackingMode(e.value as ProductTrackingMode)}
-      />
-      <TextBox label="Brand" value={brand} onValueChanged={(e) => setBrand(String(e.value ?? ''))} />
-      <TextBox label="Category" value={category} onValueChanged={(e) => setCategory(String(e.value ?? ''))} />
-      <TextBox label="Description" value={description} onValueChanged={(e) => setDescription(String(e.value ?? ''))} />
-      <div className="form-page__actions">
+      <div className="entity-form-page__body entity-form-page__body--fields">
+        <TextBox
+          label="Reference (required, unique)"
+          value={reference}
+          onValueChanged={(e) => setReference(String(e.value ?? ''))}
+        />
+        <TextBox label="SKU (optional)" value={sku} onValueChanged={(e) => setSku(String(e.value ?? ''))} />
+        <TextBox label="Name" value={name} onValueChanged={(e) => setName(String(e.value ?? ''))} />
+        <SelectBox
+          label="Tracking mode"
+          dataSource={trackingOptions}
+          displayExpr="text"
+          valueExpr="value"
+          value={trackingMode}
+          onValueChanged={(e) => setTrackingMode(e.value as ProductTrackingMode)}
+        />
+        <TextBox label="Brand" value={brand} onValueChanged={(e) => setBrand(String(e.value ?? ''))} />
+        <TextBox label="Category" value={category} onValueChanged={(e) => setCategory(String(e.value ?? ''))} />
+        <TextBox label="Description" value={description} onValueChanged={(e) => setDescription(String(e.value ?? ''))} />
+      </div>
+      <div className="form-page__actions" style={{ marginTop: '0.25rem' }}>
         <Button
-          text="Save"
+          text="Create product"
           type="default"
           stylingMode="contained"
           disabled={!perm.create}
           onClick={() => void submit()}
         />
-        <Button text="Cancel" onClick={() => navigate('/products')} />
       </div>
-    </div>
+    </EntityFormPage>
   )
 }

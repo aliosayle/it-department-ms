@@ -6,14 +6,16 @@ import { PortalGridPage } from '@/components/grid/PortalGridPage'
 import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { storageUnitListGridConfig } from '@/pages/gridPageConfigs.stockDomain'
 import { useCan } from '@/auth/AuthContext'
-import { buildStorageUnitListRows, useMockStore } from '@/mocks/mockStore'
-import type { StorageUnitListRow } from '@/mocks/mockStore'
+import { usePortalBootstrap } from '@/api/usePortalBootstrap'
+import { renderBootstrapGate } from '@/components/portal/BootstrapStatus'
+import { buildStorageUnitListRowsFromState, type StorageUnitListRow } from '@/domain/inventoryView'
 
 export function StorageUnitsListPage() {
-  useMockStore()
+  const b = usePortalBootstrap()
+  const gate = renderBootstrapGate(b)
   const navigate = useNavigate()
   const perm = useCan('storageUnits')
-  const rows = buildStorageUnitListRows()
+  const rows = b.snapshot ? buildStorageUnitListRowsFromState(b.snapshot) : []
 
   const onRowClick = (e: RowClickEvent<StorageUnitListRow, string | number>) => {
     const id = e.data?.id
@@ -31,6 +33,8 @@ export function StorageUnitsListPage() {
     [perm.view, perm.edit, perm.delete],
   )
 
+  if (gate) return gate
+
   return (
     <>
       <div className="list-toolbar">
@@ -45,6 +49,11 @@ export function StorageUnitsListPage() {
           </Link>
         ) : null}
       </div>
+      {rows.length === 0 ? (
+        <p className="form-page__hint form-page__hint--warn" style={{ marginTop: 8 }}>
+          No storage units yet. <Link to="/stock/storage-units/new">New storage unit</Link>
+        </p>
+      ) : null}
       <PortalGridPage
         config={storageUnitListGridConfig}
         dataSource={rows}

@@ -4,16 +4,21 @@ import Button from 'devextreme-react/button'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
 import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { productStockPositionsGridConfig } from '@/pages/gridPageConfigs.stockDomain'
-import type { ProductStockRow } from '@/mocks/mockStore'
-import { buildProductStockRows, getProductById, productCatalogLabel, useMockStore } from '@/mocks/mockStore'
+import { buildProductStockRowsFromState, getProductByIdFromState, type ProductStockRow } from '@/domain/inventoryView'
+import { productCatalogLabel } from '@/mocks/mockStore'
 import { useCan } from '@/auth/AuthContext'
+import { usePortalBootstrap } from '@/api/usePortalBootstrap'
+import { renderBootstrapGate } from '@/components/portal/BootstrapStatus'
 
 export function ProductStockPage() {
   const { productId = '' } = useParams<{ productId: string }>()
-  useMockStore()
-  const product = getProductById(productId)
-  const rows = buildProductStockRows(productId)
+  const b = usePortalBootstrap()
+  const gate = renderBootstrapGate(b)
   const perm = useCan('products')
+
+  const snapshot = b.snapshot
+  const product = snapshot && productId ? getProductByIdFromState(snapshot, productId) : undefined
+  const rows = snapshot && productId ? buildProductStockRowsFromState(snapshot, productId) : []
 
   const rowActions = useMemo<PortalGridRowActions<ProductStockRow>>(
     () => ({
@@ -21,10 +26,14 @@ export function ProductStockPage() {
       canEdit: perm.edit,
       canDelete: perm.delete,
       getViewHref: (r) => `/stock/storage-units/${String(r.storageUnitId)}`,
-      getEditHref: () => `/products/${productId}/storage`,
+      getEditHref: () => `/products/${productId}/edit`,
     }),
     [perm.view, perm.edit, perm.delete, productId],
   )
+
+  if (gate) return gate
+
+  if (!snapshot) return null
 
   if (!product) {
     return (

@@ -6,14 +6,17 @@ import { PortalGridPage } from '@/components/grid/PortalGridPage'
 import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { stockProductSummaryGridConfig } from '@/pages/gridPageConfigs.stockDomain'
 import { useCan } from '@/auth/AuthContext'
-import { buildStockOverviewByProduct, useMockStore } from '@/mocks/mockStore'
+import { usePortalBootstrap } from '@/api/usePortalBootstrap'
+import { renderBootstrapGate } from '@/components/portal/BootstrapStatus'
+import { buildStockOverviewByProductFromState } from '@/domain/inventoryView'
 import type { StockProductSummaryRow } from '@/mocks/domain/types'
 import './formPage.css'
 
 export function StockListPage() {
-  useMockStore()
+  const b = usePortalBootstrap()
+  const gate = renderBootstrapGate(b)
   const navigate = useNavigate()
-  const rows = buildStockOverviewByProduct()
+  const rows = b.snapshot ? buildStockOverviewByProductFromState(b.snapshot) : []
   const receive = useCan('stockReceive')
   const transfer = useCan('stockTransfer')
   const storages = useCan('storageUnits')
@@ -32,10 +35,12 @@ export function StockListPage() {
       canEdit: products.edit,
       canDelete: products.delete,
       getViewHref: (r) => `/products/${String(r.productId)}/stock`,
-      getEditHref: (r) => `/products/${String(r.productId)}/storage`,
+      getEditHref: (r) => `/products/${String(r.productId)}/edit`,
     }),
     [products.view, products.edit, products.delete],
   )
+
+  if (gate) return gate
 
   return (
     <>
@@ -57,6 +62,11 @@ export function StockListPage() {
         {receive.create ? (
           <Link to="/stock/receive">
             <Button text="Receive stock" type="default" stylingMode="contained" />
+          </Link>
+        ) : null}
+        {receive.create ? (
+          <Link to="/stock/receive-serialized">
+            <Button text="Receive serialized" />
           </Link>
         ) : null}
         {transfer.create ? (
@@ -83,7 +93,8 @@ export function StockListPage() {
       {rows.length === 0 ? (
         <p className="form-page__hint form-page__hint--warn" style={{ marginTop: 8 }}>
           No stock on hand yet. Define products and storage, then receive via{' '}
-          <Link to="/stock/receive">Receive stock</Link> or <Link to="/purchases">Purchases</Link>.
+          <Link to="/stock/receive">Receive stock</Link>,{' '}
+          <Link to="/stock/receive-serialized">Receive serialized</Link>, or <Link to="/purchases">Purchases</Link>.
         </p>
       ) : null}
       <PortalGridPage

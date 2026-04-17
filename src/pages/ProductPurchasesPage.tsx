@@ -7,16 +7,22 @@ import { PortalGridPage } from '@/components/grid/PortalGridPage'
 import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { purchasesGridConfig } from '@/pages/gridPageConfigs.stockDomain'
 import type { PurchaseListRow } from '@/mocks/domain/types'
-import { buildPurchasesForProduct, getProductById, productCatalogLabel, useMockStore } from '@/mocks/mockStore'
+import { buildPurchasesForProductFromState, getProductByIdFromState } from '@/domain/inventoryView'
+import { productCatalogLabel } from '@/mocks/mockStore'
 import { useCan } from '@/auth/AuthContext'
+import { usePortalBootstrap } from '@/api/usePortalBootstrap'
+import { renderBootstrapGate } from '@/components/portal/BootstrapStatus'
 
 export function ProductPurchasesPage() {
   const { productId = '' } = useParams<{ productId: string }>()
-  useMockStore()
+  const b = usePortalBootstrap()
+  const gate = renderBootstrapGate(b)
   const navigate = useNavigate()
-  const product = getProductById(productId)
-  const rows = buildPurchasesForProduct(productId)
   const perm = useCan('purchases')
+
+  const snapshot = b.snapshot
+  const product = snapshot && productId ? getProductByIdFromState(snapshot, productId) : undefined
+  const rows = snapshot && productId ? buildPurchasesForProductFromState(snapshot, productId) : []
 
   const onRowClick = (e: RowClickEvent<PurchaseListRow, string | number>) => {
     const id = e.data?.id
@@ -33,6 +39,10 @@ export function ProductPurchasesPage() {
     }),
     [perm.view, perm.edit, perm.delete],
   )
+
+  if (gate) return gate
+
+  if (!snapshot) return null
 
   if (!product) {
     return (

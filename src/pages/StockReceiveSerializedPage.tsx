@@ -1,12 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Button from 'devextreme-react/button'
-import NumberBox from 'devextreme-react/number-box'
 import SelectBox from 'devextreme-react/select-box'
 import TextArea from 'devextreme-react/text-area'
-import TextBox from 'devextreme-react/text-box'
 import { useCan } from '@/auth/AuthContext'
-import { portalReceiveStock } from '@/api/mutations'
+import { portalReceiveSerialized } from '@/api/mutations'
 import { usePortalBootstrap } from '@/api/usePortalBootstrap'
 import { renderBootstrapGate } from '@/components/portal/BootstrapStatus'
 import { productOptionText } from '@/domain/inventoryView'
@@ -15,27 +13,27 @@ import './formPage.css'
 
 const reasons: ReceiveStockReason[] = ['Purchase', 'Return', 'Transfer', 'Adjustment', 'Other']
 
-export function StockReceivePage() {
+export function StockReceiveSerializedPage() {
   const navigate = useNavigate()
   const b = usePortalBootstrap()
   const gate = renderBootstrapGate(b)
   const perm = useCan('stockReceive')
 
-  const snapshot = b.snapshot
-  const products = snapshot?.products ?? []
-  const storageUnits = snapshot?.storageUnits ?? []
-
   const [productId, setProductId] = useState<string | null>(null)
   const [storageUnitId, setStorageUnitId] = useState<string | null>(null)
-  const [quantity, setQuantity] = useState<number | null>(1)
-  const [status, setStatus] = useState('Available')
+  const [identifiersText, setIdentifiersText] = useState('')
   const [reason, setReason] = useState<ReceiveStockReason>('Purchase')
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  const snapshot = b.snapshot
+  const { products, storageUnits } = snapshot ?? { products: [], storageUnits: [] }
+
+  const serializedProducts = useMemo(() => products.filter((p) => p.trackingMode === 'serialized'), [products])
+
   const productOptions = useMemo(
-    () => products.map((p) => ({ value: p.id, text: productOptionText(p) })),
-    [products],
+    () => serializedProducts.map((p) => ({ value: p.id, text: productOptionText(p) })),
+    [serializedProducts],
   )
 
   const storageOptions = useMemo(
@@ -46,7 +44,8 @@ export function StockReceivePage() {
     [storageUnits],
   )
 
-  const masterDataReady = Boolean(snapshot) && products.length > 0 && storageUnits.filter((u) => u.kind !== 'custody').length > 0
+  const masterDataReady =
+    Boolean(snapshot) && serializedProducts.length > 0 && storageUnits.filter((u) => u.kind !== 'custody').length > 0
 
   const submit = async () => {
     setError(null)
@@ -54,17 +53,21 @@ export function StockReceivePage() {
       setError('You do not have permission to receive stock.')
       return
     }
-    if (!productId || !storageUnitId || quantity == null) {
-      setError('Product, storage unit, and quantity are required.')
+    const identifiers = identifiersText
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (!productId || !storageUnitId || identifiers.length < 1) {
+      setError('Product, storage unit, and at least one identifier (one per line) are required.')
       return
     }
-    const result = await portalReceiveStock({
+    const result = await portalReceiveSerialized({
       productId,
       storageUnitId,
-      quantity,
-      status: status.trim(),
+      identifiers,
       reason,
       note,
+      purchaseId: null,
     })
     if (!result.ok) {
       setError(result.error)
@@ -79,24 +82,22 @@ export function StockReceivePage() {
     <div className="form-page form-page--wide">
       {error ? <p className="form-page__error">{error}</p> : null}
       <p className="form-page__hint">
-        Records inbound quantity against a storage location and updates the inventory ledger. Custody bins are
-        excluded — receive into warehouse storage, then use <Link to="/assignments/new">Assignments</Link> to issue to
-        personnel. For supplier shipments with a delivery note (bon), use{' '}
-        <Link to="/purchases">Purchases</Link> to receive lines so movements stay tied to the order.{' '}
-        <Link to="/master-data/suppliers">Suppliers</Link>. Serialized SKUs:{' '}
-        <Link to="/stock/receive-serialized">Receive serialized</Link>.
+        Creates one asset per MAC or serial for <strong>serialized</strong> products. Custody bins are excluded — same
+        rules as <Link to="/stock/receive">bulk receive</Link>. For purchase-driven custody receives, use{' '}
+        <Link to="/purchases">Purchases</Link>.
       </p>
       {!masterDataReady ? (
         <p className="form-page__hint form-page__hint--warn">
-          Add at least one product and one storage unit before receiving.{' '}
-          <Link to="/products/new">New product</Link> · <Link to="/stock/storage-units/new">New storage unit</Link>
+          You need at least one <strong>serialized</strong> product and one non-custody storage unit.{' '}
+          <Link to="/products/new">New product</Link> (tracking: serialized) ·{' '}
+          <Link to="/stock/storage-units/new">New storage unit</Link>
         </p>
       ) : null}
       <p className="form-page__section" style={{ marginTop: '0.5rem' }}>
         Product and location
       </p>
       <SelectBox
-        label="Product"
+        label="Product (serialized)"
         dataSource={productOptions}
         displayExpr="text"
         valueExpr="value"
@@ -115,40 +116,29 @@ export function StockReceivePage() {
         disabled={!masterDataReady}
         onValueChanged={(e) => setStorageUnitId(e.value as string | null)}
       />
-      <NumberBox
-        label="Quantity"
-        value={quantity ?? undefined}
-        min={1}
-        showSpinButtons
-        onValueChanged={(e) => setQuantity(e.value as number | null)}
+      <TextArea
+        label="Identifiers (one MAC or serial per line)"
+        value={identifiersText}
+        height={140}
+        onValueChanged={(e) => setIdentifiersText(String(e.value ?? ''))}
       />
       <p className="form-page__section" style={{ marginTop: '0.75rem' }}>
         Classification
       </p>
-      <TextBox
-        label="Status"
-        value={status}
-        onValueChanged={(e) => setStatus(String(e.value ?? ''))}
-      />
       <SelectBox
         label="Reason"
         dataSource={reasons}
         value={reason}
         onValueChanged={(e) => setReason(e.value as ReceiveStockReason)}
       />
-      <TextArea
-        label="Note"
-        value={note}
-        height={80}
-        onValueChanged={(e) => setNote(String(e.value ?? ''))}
-      />
+      <TextArea label="Note" value={note} height={80} onValueChanged={(e) => setNote(String(e.value ?? ''))} />
       <div className="form-page__actions">
         <Button
           text="Save"
           type="default"
           stylingMode="contained"
           disabled={!perm.create || !masterDataReady}
-          onClick={submit}
+          onClick={() => void submit()}
         />
         <Button text="Cancel" onClick={() => navigate('/stock')} />
       </div>

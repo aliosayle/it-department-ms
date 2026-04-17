@@ -7,15 +7,21 @@ import {
   storageUnitsForProductGridConfig,
   type StorageUnitDistinctRow,
 } from '@/pages/gridPageConfigs.stockDomain'
-import { getProductById, getStorageUnitsForProduct, productCatalogLabel, useMockStore } from '@/mocks/mockStore'
+import { getProductByIdFromState, getStorageUnitsForProductFromState } from '@/domain/inventoryView'
+import { productCatalogLabel } from '@/mocks/mockStore'
 import { useCan } from '@/auth/AuthContext'
+import { usePortalBootstrap } from '@/api/usePortalBootstrap'
+import { renderBootstrapGate } from '@/components/portal/BootstrapStatus'
 
 export function ProductStoragePage() {
   const { productId = '' } = useParams<{ productId: string }>()
-  useMockStore()
-  const product = getProductById(productId)
-  const rows = getStorageUnitsForProduct(productId)
+  const b = usePortalBootstrap()
+  const gate = renderBootstrapGate(b)
   const perm = useCan('products')
+
+  const snapshot = b.snapshot
+  const product = snapshot && productId ? getProductByIdFromState(snapshot, productId) : undefined
+  const rows = snapshot && productId ? getStorageUnitsForProductFromState(snapshot, productId) : []
 
   const rowActions = useMemo<PortalGridRowActions<StorageUnitDistinctRow>>(
     () => ({
@@ -23,10 +29,14 @@ export function ProductStoragePage() {
       canEdit: perm.edit,
       canDelete: perm.delete,
       getViewHref: (r) => `/stock/storage-units/${String(r.id)}`,
-      getEditHref: () => `/products/${productId}/stock`,
+      getEditHref: () => `/products/${productId}/edit`,
     }),
     [perm.view, perm.edit, perm.delete, productId],
   )
+
+  if (gate) return gate
+
+  if (!snapshot) return null
 
   if (!product) {
     return (

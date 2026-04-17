@@ -4,18 +4,22 @@ import type { RowClickEvent } from 'devextreme/ui/data_grid'
 import Button from 'devextreme-react/button'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
 import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
-import { useCan } from '@/auth/AuthContext'
+import { usePortalBootstrap } from '@/api/usePortalBootstrap'
+import { renderBootstrapGate } from '@/components/portal/BootstrapStatus'
 import { productsGridConfig } from '@/pages/gridPageConfigs.stockDomain'
 import type { Product } from '@/mocks/domain/types'
-import { useMockStore } from '@/mocks/mockStore'
+import { useCan } from '@/auth/AuthContext'
 import './formPage.css'
 
 export function ProductsListPage() {
   const navigate = useNavigate()
-  const { products } = useMockStore()
+  const b = usePortalBootstrap()
+  const gate = renderBootstrapGate(b)
   const perm = useCan('products')
   const purchases = useCan('purchases')
   const suppliers = useCan('suppliers')
+
+  const products = b.snapshot?.products ?? []
 
   const onRowClick = (e: RowClickEvent<Product, string | number>) => {
     const id = e.data?.id
@@ -28,10 +32,12 @@ export function ProductsListPage() {
       canEdit: perm.edit,
       canDelete: perm.delete,
       getViewHref: (r) => `/products/${String(r.id)}/reports`,
-      getEditHref: (r) => `/products/${String(r.id)}/stock`,
+      getEditHref: (r) => `/products/${String(r.id)}/edit`,
     }),
     [perm.view, perm.edit, perm.delete],
   )
+
+  if (gate) return gate
 
   return (
     <>

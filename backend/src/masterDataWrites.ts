@@ -103,6 +103,93 @@ export async function insertProduct(
   }
 }
 
+export async function updateProduct(
+  pool: Pool,
+  id: string,
+  input: {
+    reference?: string
+    sku?: string | null
+    name?: string
+    brand?: string
+    category?: string
+    description?: string
+    trackingMode?: 'quantity' | 'serialized'
+  },
+): Promise<{ ok: true; product: Record<string, unknown> } | { ok: false; error: string }> {
+  const [[p]] = await pool.query<RowDataPacket[]>(
+    'SELECT id, reference, sku, name, brand, category, description, tracking_mode AS trackingMode FROM products WHERE id = ?',
+    [id],
+  )
+  if (!p) return { ok: false, error: 'Product not found.' }
+  const curTm = String(p.trackingMode) === 'serialized' ? 'serialized' : 'quantity'
+  const nextTm =
+    input.trackingMode != null ? (input.trackingMode === 'serialized' ? 'serialized' : 'quantity') : curTm
+  if (nextTm !== curTm) {
+    const [[cnt]] = await pool.query<RowDataPacket[]>(
+      `SELECT (
+        (SELECT COUNT(*) FROM stock_positions WHERE product_id = ? AND quantity > 0) +
+        (SELECT COUNT(*) FROM serialized_assets WHERE product_id = ?)
+      ) AS c`,
+      [id, id],
+    )
+    if (Number(cnt?.c) > 0) {
+      return {
+        ok: false,
+        error: 'Cannot change tracking mode while stock or serialized assets exist for this product.',
+      }
+    }
+  }
+
+  const reference = (input.reference != null ? input.reference : String(p.reference ?? '')).trim()
+  const name = (input.name != null ? input.name : String(p.name ?? '')).trim()
+  if (!reference) return { ok: false, error: 'Reference is required.' }
+  if (!name) return { ok: false, error: 'Name is required.' }
+
+  const [[dupRef]] = await pool.query<RowDataPacket[]>(
+    'SELECT id FROM products WHERE LOWER(reference) = LOWER(?) AND id <> ?',
+    [reference, id],
+  )
+  if (dupRef) return { ok: false, error: 'A product with this reference already exists.' }
+
+  let sku: string | null
+  if (input.sku !== undefined) {
+    const skuRaw = input.sku == null ? '' : String(input.sku).trim()
+    sku = skuRaw === '' ? null : skuRaw
+  } else {
+    sku = p.sku == null ? null : String(p.sku)
+  }
+  if (sku) {
+    const [[dupSku]] = await pool.query<RowDataPacket[]>(
+      'SELECT id FROM products WHERE sku IS NOT NULL AND LOWER(sku) = LOWER(?) AND id <> ?',
+      [sku, id],
+    )
+    if (dupSku) return { ok: false, error: 'A product with this SKU already exists.' }
+  }
+
+  const brand = (input.brand != null ? input.brand : String(p.brand ?? '')).trim()
+  const category = (input.category != null ? input.category : String(p.category ?? '')).trim()
+  const description = (input.description != null ? input.description : String(p.description ?? '')).trim()
+
+  await pool.query(
+    'UPDATE products SET reference = ?, sku = ?, name = ?, brand = ?, category = ?, description = ?, tracking_mode = ? WHERE id = ?',
+    [reference, sku, name, brand, category, description, nextTm, id],
+  )
+
+  return {
+    ok: true,
+    product: {
+      id,
+      reference,
+      sku: sku ?? '',
+      name,
+      brand,
+      category,
+      description,
+      trackingMode: nextTm,
+    },
+  }
+}
+
 export async function insertStorageUnit(
   pool: Pool,
   row: { siteId: string; code: string; label: string; kind: string; personnelId: string | null | undefined },

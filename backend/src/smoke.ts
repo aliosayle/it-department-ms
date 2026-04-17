@@ -19,11 +19,24 @@ async function main() {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   if (!br.ok) throw new Error(`bootstrap ${br.status} ${await br.text()}`)
-  const snap = (await br.json()) as { companies?: Array<{ id: string; name?: string }>; users?: Array<{ id: string }> }
+  const snap = (await br.json()) as {
+    companies?: Array<{ id: string; name?: string }>
+    users?: Array<{ id: string }>
+    products?: Array<{ id: string; name?: string }>
+  }
   if (!Array.isArray(snap.companies) || !snap.companies[0]?.id) throw new Error('bootstrap missing companies')
   if (!Array.isArray(snap.users) || !snap.users[0]?.id) throw new Error('bootstrap missing users')
+  if (!Array.isArray(snap.products) || !snap.products[0]?.id) throw new Error('bootstrap missing products')
 
   const companyId = snap.companies[0].id
+  const productId = snap.products[0].id
+  const patchPr = await fetch(`${base}/api/v1/products/${encodeURIComponent(productId)}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: `SmokeProduct-${Date.now()}` }),
+  })
+  if (!patchPr.ok) throw new Error(`product patch ${patchPr.status} ${await patchPr.text()}`)
+
   const patchCo = await fetch(`${base}/api/v1/companies/${encodeURIComponent(companyId)}`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -55,7 +68,7 @@ async function main() {
     }),
   })
   if (!taskRes.ok) throw new Error(`task create ${taskRes.status} ${await taskRes.text()}`)
-  console.log('smoke ok: health, login, bootstrap, company patch, roles, tasks')
+  console.log('smoke ok: health, login, bootstrap, product patch, company patch, roles, tasks')
 }
 
 main().catch((e) => {

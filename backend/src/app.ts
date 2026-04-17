@@ -14,6 +14,7 @@ import {
   insertPersonnel,
   insertPortalUser,
   insertProduct,
+  updateProduct,
   insertSite,
   insertStorageUnit,
   insertSupplier,
@@ -359,6 +360,28 @@ export async function buildApp() {
           const code = err.statusCode === 409 ? 409 : 400
           return reply.code(code).send({ error: code === 409 ? 'conflict' : 'bad_request', message: err.message })
         }
+      })
+
+      r.patch<{ Params: { id: string } }>('/products/:id', { preHandler: requireAuth }, async (req, reply) => {
+        assertPermission(req.auth!.perms, 'products', 'edit')
+        const b = req.body as Record<string, unknown>
+        const skuIn = b.sku
+        const res = await updateProduct(pool, req.params.id, {
+          reference: b.reference != null ? String(b.reference) : undefined,
+          sku: skuIn === undefined ? undefined : skuIn == null || skuIn === '' ? null : String(skuIn),
+          name: b.name != null ? String(b.name) : undefined,
+          brand: b.brand != null ? String(b.brand) : undefined,
+          category: b.category != null ? String(b.category) : undefined,
+          description: b.description != null ? String(b.description) : undefined,
+          trackingMode:
+            b.trackingMode === 'serialized'
+              ? 'serialized'
+              : b.trackingMode === 'quantity'
+                ? 'quantity'
+                : undefined,
+        })
+        if (!res.ok) return reply.code(400).send({ error: 'bad_request', message: res.error })
+        return res.product
       })
 
       r.post('/storage-units', { preHandler: requireAuth }, async (req, reply) => {

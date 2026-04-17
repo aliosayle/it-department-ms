@@ -14,7 +14,7 @@ import type {
   StockProductSummaryRow,
   Supplier,
 } from '@/mocks/domain/types'
-import type { ProductStockRow, StorageUnitListRow } from '@/mocks/mockStore'
+import type { ProductStockRow, StorageUnitListRow } from '@/domain/inventoryView'
 
 const empty = [] as unknown[]
 

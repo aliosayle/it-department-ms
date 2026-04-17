@@ -247,6 +247,29 @@ export async function portalAddProduct(input: {
   }
 }
 
+export async function portalUpdateProduct(
+  productId: string,
+  input: {
+    reference?: string
+    sku?: string | null
+    name?: string
+    brand?: string
+    category?: string
+    description?: string
+    trackingMode?: 'quantity' | 'serialized'
+  },
+): Promise<{ ok: true; product: Product } | { ok: false; error: string }> {
+  if (!isLiveApi()) return { ok: false, error: NEED_API }
+  try {
+    const product = await apiPatchJson<Product>(`/products/${encodeURIComponent(productId)}`, input)
+    if (!product?.id) return { ok: false, error: 'Invalid response from server.' }
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    return { ok: true, product }
+  } catch (e) {
+    return mapLiveFailure(e) as { ok: false; error: string }
+  }
+}
+
 export async function portalAddStorageUnit(input: {
   siteId: string
   code: string

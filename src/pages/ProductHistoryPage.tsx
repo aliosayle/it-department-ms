@@ -4,9 +4,12 @@ import Button from 'devextreme-react/button'
 import { PortalGridPage } from '@/components/grid/PortalGridPage'
 import type { PortalGridRowActions } from '@/components/grid/portalGridTypes'
 import { movementStatementGridConfig } from '@/pages/gridPageConfigs.stockDomain'
-import { buildMovementStatementRows, getProductById, productCatalogLabel, useMockStore } from '@/mocks/mockStore'
+import { buildMovementStatementRowsFromState, getProductByIdFromState } from '@/domain/inventoryView'
 import type { MovementStatementRow } from '@/mocks/domain/types'
+import { productCatalogLabel } from '@/mocks/mockStore'
 import { useCan } from '@/auth/AuthContext'
+import { usePortalBootstrap } from '@/api/usePortalBootstrap'
+import { renderBootstrapGate } from '@/components/portal/BootstrapStatus'
 
 function csvEscape(s: string): string {
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`
@@ -50,10 +53,13 @@ function buildStatementCsv(rows: MovementStatementRow[]): string {
 
 export function ProductHistoryPage() {
   const { productId = '' } = useParams<{ productId: string }>()
-  useMockStore()
-  const product = getProductById(productId)
-  const rows = buildMovementStatementRows(productId)
+  const b = usePortalBootstrap()
+  const gate = renderBootstrapGate(b)
   const perm = useCan('products')
+
+  const snapshot = b.snapshot
+  const product = snapshot && productId ? getProductByIdFromState(snapshot, productId) : undefined
+  const rows = snapshot && productId ? buildMovementStatementRowsFromState(snapshot, productId) : []
 
   const rowActions = useMemo<PortalGridRowActions<MovementStatementRow>>(
     () => ({
@@ -64,7 +70,7 @@ export function ProductHistoryPage() {
         if (r.refPurchaseId) return `/purchases/${String(r.refPurchaseId)}`
         return `/products/${productId}/stock`
       },
-      getEditHref: () => `/products/${productId}/stock`,
+      getEditHref: () => `/products/${productId}/edit`,
     }),
     [perm.view, perm.edit, perm.delete, productId],
   )
@@ -83,6 +89,10 @@ export function ProductHistoryPage() {
       document.body.removeChild(ta)
     }
   }
+
+  if (gate) return gate
+
+  if (!snapshot) return null
 
   if (!product) {
     return (

@@ -34,6 +34,7 @@ import type {
   UserRoleRow,
 } from '@/mocks/domain/types'
 import { fullPermissionsMap } from '@/auth/pageKeys'
+import * as inventoryView from '@/domain/inventoryView'
 import type { AssetRow, Ticket } from '@/mocks/types'
 import assetsSeed from '@/mocks/assets.json'
 import ticketsSeed from '@/mocks/tickets.json'
@@ -774,112 +775,29 @@ export function transferStock(input: TransferStockInput): TransferStockResult {
 }
 
 export function buildStockOverview(): StockOverviewRow[] {
-  return active().stockPositions.filter((pos) => pos.quantity > 0).map((pos) => {
-    const product = active().products.find((p) => p.id === pos.productId)
-    const su = active().storageUnits.find((u) => u.id === pos.storageUnitId)
-    const site = su ? active().sites.find((x) => x.id === su.siteId) : undefined
-    const company = site ? active().companies.find((c) => c.id === site.companyId) : undefined
-    return {
-      id: pos.id,
-      productId: pos.productId,
-      productSku: product?.reference || product?.sku || pos.productId,
-      productName: product?.name ?? '—',
-      storageCode: su ? `${su.code} (${su.label})` : '—',
-      siteName: site?.name ?? '—',
-      companyName: company?.name ?? '—',
-      quantity: pos.quantity,
-      status: pos.status,
-    }
-  })
+  return inventoryView.buildStockOverviewFromState(active())
 }
 
 export function buildStockOverviewByProduct(): StockProductSummaryRow[] {
-  const byProduct = new Map<string, number>()
-  for (const pos of active().stockPositions) {
-    if (pos.quantity <= 0) continue
-    byProduct.set(pos.productId, (byProduct.get(pos.productId) ?? 0) + pos.quantity)
-  }
-  const rows: StockProductSummaryRow[] = []
-  for (const [productId, totalQuantity] of byProduct) {
-    const product = active().products.find((p) => p.id === productId)
-    rows.push({
-      id: productId,
-      productId,
-      productSku: product?.reference || product?.sku || productId,
-      productName: product?.name ?? '—',
-      totalQuantity,
-    })
-  }
-  return rows.sort((a, b) => a.productSku.localeCompare(b.productSku))
+  return inventoryView.buildStockOverviewByProductFromState(active())
 }
 
 export function buildStockPositionsForStorageUnit(storageUnitId: string): StorageUnitStockRow[] {
-  return active().stockPositions
-    .filter((pos) => pos.storageUnitId === storageUnitId && pos.quantity > 0)
-    .map((pos) => {
-      const product = active().products.find((p) => p.id === pos.productId)
-      const su = active().storageUnits.find((u) => u.id === pos.storageUnitId)
-      const site = su ? active().sites.find((x) => x.id === su.siteId) : undefined
-      const company = site ? active().companies.find((c) => c.id === site.companyId) : undefined
-      return {
-        id: pos.id,
-        productId: pos.productId,
-        productSku: product?.reference || product?.sku || pos.productId,
-        productName: product?.name ?? '—',
-        storageCode: su ? `${su.code} (${su.label})` : '—',
-        siteName: site?.name ?? '—',
-        companyName: company?.name ?? '—',
-        quantity: pos.quantity,
-        status: pos.status,
-      }
-    })
+  return inventoryView.buildStockPositionsForStorageUnitFromState(active(), storageUnitId)
 }
 
-export type StorageUnitListRow = StorageUnit & {
-  siteName: string
-  companyName: string
-  holderName?: string
-}
+export type StorageUnitListRow = inventoryView.StorageUnitListRow
 
 export function buildStorageUnitListRows(): StorageUnitListRow[] {
-  return active().storageUnits.map((u) => {
-    const site = active().sites.find((s) => s.id === u.siteId)
-    const company = site ? active().companies.find((c) => c.id === site.companyId) : undefined
-    const holder = u.personnelId
-      ? active().personnel.find((p) => p.id === u.personnelId)?.fullName
-      : undefined
-    return {
-      ...u,
-      siteName: site?.name ?? '—',
-      companyName: company?.name ?? '—',
-      holderName: holder,
-    }
-  })
+  return inventoryView.buildStorageUnitListRowsFromState(active())
 }
 
 export function getStorageUnitById(id: string): StorageUnit | undefined {
-  return active().storageUnits.find((u) => u.id === id)
+  return inventoryView.getStorageUnitByIdFromState(active(), id)
 }
 
 export function buildMovementStatementRows(productId: string): MovementStatementRow[] {
-  return active().productMovements
-    .filter((m) => m.productId === productId)
-    .slice()
-    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
-    .map((m) => ({
-      id: m.id,
-      at: m.at,
-      fromLabel: m.fromStorageLabel ?? '—',
-      toLabel: m.toStorageLabel ?? '—',
-      delta: m.delta,
-      reason: m.reason,
-      note: m.note,
-      refAssignmentId: m.refAssignmentId,
-      refAssetId: m.refAssetId,
-      refStockPositionId: m.refStockPositionId,
-      refPurchaseId: m.refPurchaseId ?? null,
-      correlationId: m.correlationId,
-    }))
+  return inventoryView.buildMovementStatementRowsFromState(active(), productId)
 }
 
 export function addSupplier(
@@ -915,28 +833,11 @@ export function getPurchaseById(id: string): Purchase | undefined {
 }
 
 export function buildPurchaseListRows(): PurchaseListRow[] {
-  return active().purchases.map((p) => {
-    const sup = active().suppliers.find((s) => s.id === p.supplierId)
-    const per = active().personnel.find((x) => x.id === p.issuedByPersonnelId)
-    const site = active().sites.find((s) => s.id === p.siteId)
-    const company = site ? active().companies.find((c) => c.id === site.companyId) : undefined
-    const lineCount = active().purchaseLines.filter((l) => l.purchaseId === p.id).length
-    return {
-      ...p,
-      supplierName: sup?.name ?? '—',
-      issuedByName: per?.fullName ?? '—',
-      siteName: site?.name ?? '—',
-      companyName: company?.name ?? '—',
-      lineCount,
-    }
-  })
+  return inventoryView.buildPurchaseListRowsFromState(active())
 }
 
 export function buildPurchasesForProduct(productId: string): PurchaseListRow[] {
-  const purchaseIds = new Set(
-    active().purchaseLines.filter((l) => l.productId === productId).map((l) => l.purchaseId),
-  )
-  return buildPurchaseListRows().filter((r) => purchaseIds.has(r.id))
+  return inventoryView.buildPurchasesForProductFromState(active(), productId)
 }
 
 export function buildPurchaseLineDetailRows(purchaseId: string): PurchaseLineDetailRow[] {
@@ -1135,63 +1036,30 @@ export function getPortalUserById(id: string): PortalUser | undefined {
 }
 
 export function getProductById(id: string): Product | undefined {
-  return active().products.find((p) => p.id === id)
+  return inventoryView.getProductByIdFromState(active(), id)
 }
 
 export function getMovementsForProduct(productId: string): ProductMovement[] {
-  return active().productMovements
-    .filter((m) => m.productId === productId)
-    .sort((a, b) => (a.at < b.at ? 1 : -1))
+  return inventoryView.getMovementsForProductFromState(active(), productId)
 }
 
 export function getStockPositionsForProduct(productId: string): StockPosition[] {
-  return active().stockPositions.filter((p) => p.productId === productId && p.quantity > 0)
+  return inventoryView.getStockPositionsForProductFromState(active(), productId)
 }
 
 /** Stock positions for one product with joined labels (product stock tab). */
-export type ProductStockRow = StockPosition & {
-  storageCode: string
-  siteName: string
-  companyName: string
-}
+export type ProductStockRow = inventoryView.ProductStockRow
 
 export function buildProductStockRows(productId: string): ProductStockRow[] {
-  return getStockPositionsForProduct(productId).map((pos) => {
-    const su = active().storageUnits.find((u) => u.id === pos.storageUnitId)
-    const site = su ? active().sites.find((s) => s.id === su.siteId) : undefined
-    const company = site ? active().companies.find((c) => c.id === site.companyId) : undefined
-    const storageCode = su ? `${su.code} (${su.label})` : pos.storageUnitId
-    return {
-      ...pos,
-      storageCode,
-      siteName: site?.name ?? '—',
-      companyName: company?.name ?? '—',
-    }
-  })
+  return inventoryView.buildProductStockRowsFromState(active(), productId)
 }
 
 export function getReportsForProduct(productId: string): ProductReportRow[] {
-  return active().productReports.filter((r) => r.productId === productId)
+  return inventoryView.getReportsForProductFromState(active(), productId)
 }
 
 export function getStorageUnitsForProduct(productId: string) {
-  const posIds = new Set(
-    active().stockPositions.filter((p) => p.productId === productId).map((p) => p.storageUnitId),
-  )
-  return active().storageUnits
-    .filter((u) => posIds.has(u.id))
-    .map((u) => {
-      const site = active().sites.find((s) => s.id === u.siteId)
-      const company = site ? active().companies.find((c) => c.id === site.companyId) : undefined
-      return {
-        id: u.id,
-        code: u.code,
-        label: u.label,
-        kind: u.kind,
-        siteName: site?.name ?? '—',
-        companyName: company?.name ?? '—',
-      }
-    })
+  return inventoryView.getStorageUnitsForProductFromState(active(), productId)
 }
 
 const TASK_ATTACHMENT_MIMES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'text/plain'])

@@ -24,6 +24,7 @@ import { ProductReportsPage } from '@/pages/ProductReportsPage'
 import { ProductStockPage } from '@/pages/ProductStockPage'
 import { ProductStoragePage } from '@/pages/ProductStoragePage'
 import { ProductTabRedirect } from '@/pages/ProductTabRedirect'
+import { ProductEditPage } from '@/pages/ProductEditPage'
 import { ProductNewPage } from '@/pages/ProductNewPage'
 import { ProductsListPage } from '@/pages/ProductsListPage'
 import { PurchaseDetailPage } from '@/pages/PurchaseDetailPage'
@@ -39,6 +40,7 @@ import { SupplierNewPage } from '@/pages/SupplierNewPage'
 import { SuppliersListPage } from '@/pages/SuppliersListPage'
 import { StockListPage } from '@/pages/StockListPage'
 import { StockReceivePage } from '@/pages/StockReceivePage'
+import { StockReceiveSerializedPage } from '@/pages/StockReceiveSerializedPage'
 import { StockTransferPage } from '@/pages/StockTransferPage'
 import { StorageUnitDetailPage } from '@/pages/StorageUnitDetailPage'
 import { StorageUnitNewPage } from '@/pages/StorageUnitNewPage'
@@ -113,6 +115,14 @@ export function AppRoutes() {
           element={
             <PageGuard page="stockReceive">
               <StockReceivePage />
+            </PageGuard>
+          }
+        />
+        <Route
+          path="stock/receive-serialized"
+          element={
+            <PageGuard page="stockReceive">
+              <StockReceiveSerializedPage />
             </PageGuard>
           }
         />
@@ -201,6 +211,14 @@ export function AppRoutes() {
           element={
             <PageGuard page="products" require="create">
               <ProductNewPage />
+            </PageGuard>
+          }
+        />
+        <Route
+          path="products/:productId/edit"
+          element={
+            <PageGuard page="products" require="edit">
+              <ProductEditPage />
             </PageGuard>
           }
         />

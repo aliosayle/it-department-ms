@@ -8,6 +8,7 @@ const staticTitles: Record<string, PageMeta> = {
   '/assets': { title: 'Asset register', subtitle: 'Configuration items' },
   '/stock': { title: 'Stock', subtitle: 'Totals by product across all storages' },
   '/stock/receive': { title: 'Receive stock', subtitle: 'Inbound to storage' },
+  '/stock/receive-serialized': { title: 'Receive serialized', subtitle: 'MAC or serial per unit' },
   '/stock/transfer': { title: 'Transfer stock', subtitle: 'Between storage units' },
   '/stock/storage-units': { title: 'Storage units', subtitle: 'Bins, shelves, custody' },
   '/stock/storage-units/new': { title: 'New storage unit', subtitle: 'Site bin or custody holder' },
@@ -35,6 +36,10 @@ const staticTitles: Record<string, PageMeta> = {
 
 /** More specific paths first. */
 const patternTitles: { pattern: string; meta: PageMeta }[] = [
+  {
+    pattern: '/products/:productId/edit',
+    meta: { title: 'Edit product', subtitle: 'Catalog fields' },
+  },
   {
     pattern: '/products/:productId/reports',
     meta: { title: 'Product reports', subtitle: 'Summary metrics' },

@@ -6,13 +6,22 @@ import SelectBox from 'devextreme-react/select-box'
 import TextArea from 'devextreme-react/text-area'
 import { useCan } from '@/auth/AuthContext'
 import { portalTransferStock } from '@/api/mutations'
-import { formatStorageUnitLabel, useMockStore } from '@/mocks/mockStore'
+import { usePortalBootstrap } from '@/api/usePortalBootstrap'
+import { renderBootstrapGate } from '@/components/portal/BootstrapStatus'
+import { productOptionText } from '@/domain/inventoryView'
+import { formatStorageUnitLabel } from '@/mocks/mockStore'
 import './formPage.css'
 
 export function StockTransferPage() {
   const navigate = useNavigate()
-  const { stockPositions, products, storageUnits } = useMockStore()
+  const b = usePortalBootstrap()
+  const gate = renderBootstrapGate(b)
   const perm = useCan('stockTransfer')
+
+  const snapshot = b.snapshot
+  const stockPositions = snapshot?.stockPositions ?? []
+  const products = snapshot?.products ?? []
+  const storageUnits = snapshot?.storageUnits ?? []
 
   const [fromStockPositionId, setFromStockPositionId] = useState<string | null>(null)
   const [toStorageUnitId, setToStorageUnitId] = useState<string | null>(null)
@@ -30,16 +39,17 @@ export function StockTransferPage() {
       .map((pos) => {
         const pr = products.find((p) => p.id === pos.productId)
         const su = storageUnits.find((u) => u.id === pos.storageUnitId)
+        const label = pr ? productOptionText(pr) : pos.productId
         return {
           value: pos.id,
-          text: `${pr?.sku ?? pos.productId} · ${formatStorageUnitLabel(su)} · qty ${pos.quantity}`,
+          text: `${label} · ${formatStorageUnitLabel(su)} · qty ${pos.quantity}`,
         }
       })
   }, [stockPositions, products, storageUnits])
 
   const fromPos = stockPositions.find((p) => p.id === fromStockPositionId)
 
-  const masterDataReady = products.length > 0 && storageUnits.length > 0
+  const masterDataReady = Boolean(snapshot) && products.length > 0 && storageUnits.length > 0
   const hasTransferableQty = stockPositions.some((p) => {
     if (p.quantity <= 0) return false
     const su = storageUnits.find((u) => u.id === p.storageUnitId)
@@ -74,6 +84,8 @@ export function StockTransferPage() {
     }
     navigate('/stock')
   }
+
+  if (gate) return gate
 
   return (
     <div className="form-page form-page--wide">

@@ -27,8 +27,7 @@ export function useMockStore(): StoreState {
 
   if (!live) return mockSnap
   if (data && isSuccess) return data
-  if (isError || isPending) return emptySnapshot
-  return emptySnapshot
+  return emptyStore()
 }
 
 export function invalidateBootstrap(): void {

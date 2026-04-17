@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { dashboardMock } from '@/mocks'
@@ -10,9 +11,46 @@ const timeFmt = new Intl.DateTimeFormat(undefined, {
 })
 
 export function DashboardPage() {
-  const { kpis, recentActivity } = dashboardMock
-  const { companies, sites, personnel, suppliers, products, storageUnits } = useMockStore()
+  const { recentActivity } = dashboardMock
+  const snap = useMockStore()
+  const { companies, sites, personnel, suppliers, products, storageUnits, serviceDeskTickets, purchases, tasks } =
+    snap
   const { can } = useAuth()
+
+  const kpis = useMemo(() => {
+    const openIncidents = serviceDeskTickets.filter(
+      (t) => String(t.id).startsWith('INC') && !/resolved|closed/i.test(String(t.status)),
+    ).length
+    const changesInflight = purchases.filter((p) => p.status === 'ordered').length
+    const slaRisk = tasks.filter((t) => String(t.status) === 'pending_review').length
+    const queuedRequests = serviceDeskTickets.filter((t) => String(t.status) === 'Queued').length
+    return [
+      {
+        id: 'incidents',
+        label: 'Open incidents',
+        value: openIncidents,
+        hint: 'INC tickets excluding resolved or closed',
+      },
+      {
+        id: 'changes',
+        label: 'Changes in flight',
+        value: changesInflight,
+        hint: 'Purchases with status ordered',
+      },
+      {
+        id: 'sla',
+        label: 'SLA at risk',
+        value: slaRisk,
+        hint: 'Tasks awaiting review',
+      },
+      {
+        id: 'requests',
+        label: 'Queued requests',
+        value: queuedRequests,
+        hint: 'Service desk tickets in Queued status',
+      },
+    ]
+  }, [serviceDeskTickets, purchases, tasks])
 
   const showSetup =
     companies.length === 0 ||

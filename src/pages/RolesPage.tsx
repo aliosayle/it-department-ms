@@ -14,8 +14,8 @@ function emptyPerms(): Record<PageKey, PageCrud> {
 }
 
 export function RolesPage() {
-  const snap = useMockStore() as unknown as { roles?: Array<{ id: string; name: string; description: string }> }
-  const roles = snap.roles ?? []
+  const snap = useMockStore()
+  const roles = snap.roles
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [perms, setPerms] = useState<Record<PageKey, PageCrud>>(emptyPerms)

@@ -19,9 +19,17 @@ async function main() {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   if (!br.ok) throw new Error(`bootstrap ${br.status} ${await br.text()}`)
-  const snap = (await br.json()) as { companies?: unknown[]; users?: Array<{ id: string }> }
-  if (!Array.isArray(snap.companies)) throw new Error('bootstrap missing companies')
+  const snap = (await br.json()) as { companies?: Array<{ id: string; name?: string }>; users?: Array<{ id: string }> }
+  if (!Array.isArray(snap.companies) || !snap.companies[0]?.id) throw new Error('bootstrap missing companies')
   if (!Array.isArray(snap.users) || !snap.users[0]?.id) throw new Error('bootstrap missing users')
+
+  const companyId = snap.companies[0].id
+  const patchCo = await fetch(`${base}/api/v1/companies/${encodeURIComponent(companyId)}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: `SmokeCo-${Date.now()}`, notes: 'smoke patch' }),
+  })
+  if (!patchCo.ok) throw new Error(`company patch ${patchCo.status} ${await patchCo.text()}`)
 
   const roleRes = await fetch(`${base}/api/v1/roles`, {
     method: 'POST',
@@ -47,7 +55,7 @@ async function main() {
     }),
   })
   if (!taskRes.ok) throw new Error(`task create ${taskRes.status} ${await taskRes.text()}`)
-  console.log('smoke ok: health, login, bootstrap, roles, tasks')
+  console.log('smoke ok: health, login, bootstrap, company patch, roles, tasks')
 }
 
 main().catch((e) => {

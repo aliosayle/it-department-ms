@@ -23,13 +23,7 @@ export function NetworkDevicesPage() {
           displayTime: 5000,
         })
       },
-      onEdit: () => {
-        notify({
-          message: 'Network device editing is not wired in this build — use the API.',
-          type: 'warning',
-          displayTime: 4000,
-        })
-      },
+      getEditHref: (r) => `/inventory/network/${encodeURIComponent(r.id)}/edit`,
     }),
     [perm.view, perm.edit, perm.delete],
   )

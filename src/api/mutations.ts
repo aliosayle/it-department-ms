@@ -21,7 +21,19 @@ import type {
   Supplier,
   TransferStockInput,
 } from '@/mocks/domain/types'
+import type { AssetRow, Ticket } from '@/mocks/types'
 import type { CreateAssignmentResult, CreatePurchaseResult, ReceivePurchaseResult } from '@/mocks/mockStore'
+import {
+  mockAddTaskAttachment,
+  mockCreateTask,
+  mockReviewTask,
+  updateCompany,
+  updateInventoryAsset,
+  updateNetworkDevice,
+  updateServiceDeskTicket,
+  updateSite,
+  updateSupplier,
+} from '@/mocks/mockStore'
 
 const NEED_API = 'Set VITE_API_BASE_URL and sign in to use this action.'
 
@@ -278,8 +290,25 @@ export async function portalUpdateUserAccess(input: { userId: string; roleIds: s
   }
 }
 
-export async function portalCreateTask(input: { title: string; description: string; assignedToUserId: string; reviewerUserId?: string | null; dueDate?: string | null }) {
-  if (!isLiveApi()) return { ok: false as const, error: NEED_API }
+export async function portalCreateTask(input: {
+  title: string
+  description: string
+  assignedToUserId: string
+  reviewerUserId?: string | null
+  dueDate?: string | null
+  createdByUserId?: string
+}) {
+  if (!isLiveApi()) {
+    const r = mockCreateTask({
+      title: input.title,
+      description: input.description,
+      assignedToUserId: input.assignedToUserId,
+      reviewerUserId: input.reviewerUserId ?? null,
+      dueDate: input.dueDate ?? null,
+      createdByUserId: input.createdByUserId ?? '',
+    })
+    return r.ok ? { ok: true as const } : { ok: false as const, error: r.error }
+  }
   try {
     await apiPostJson('/tasks', input)
     void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
@@ -289,8 +318,25 @@ export async function portalCreateTask(input: { title: string; description: stri
   }
 }
 
-export async function portalUploadTaskAttachment(input: { taskId: string; filename: string; mimeType: string; contentBase64: string }) {
-  if (!isLiveApi()) return { ok: false as const, error: NEED_API }
+export async function portalUploadTaskAttachment(input: {
+  taskId: string
+  filename: string
+  mimeType: string
+  contentBase64: string
+  uploadedByUserId?: string
+}) {
+  if (!isLiveApi()) {
+    const uid = (input.uploadedByUserId || '').trim()
+    if (!uid) return { ok: false as const, error: 'Uploader user id is required in offline mode.' }
+    const r = mockAddTaskAttachment({
+      taskId: input.taskId,
+      uploadedByUserId: uid,
+      filename: input.filename,
+      mimeType: input.mimeType,
+      contentBase64: input.contentBase64,
+    })
+    return r.ok ? { ok: true as const } : { ok: false as const, error: r.error }
+  }
   try {
     await apiPostJson(`/tasks/${encodeURIComponent(input.taskId)}/attachments`, input)
     void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
@@ -300,13 +346,141 @@ export async function portalUploadTaskAttachment(input: { taskId: string; filena
   }
 }
 
-export async function portalReviewTask(input: { taskId: string; decision: 'approved' | 'changes_requested'; comment?: string }) {
-  if (!isLiveApi()) return { ok: false as const, error: NEED_API }
+export async function portalReviewTask(input: {
+  taskId: string
+  decision: 'approved' | 'changes_requested'
+  comment?: string
+  reviewerUserId?: string
+}) {
+  if (!isLiveApi()) {
+    const rid = (input.reviewerUserId || '').trim()
+    if (!rid) return { ok: false as const, error: 'Reviewer user id is required in offline mode.' }
+    const r = mockReviewTask({
+      taskId: input.taskId,
+      reviewerUserId: rid,
+      decision: input.decision,
+      comment: input.comment,
+    })
+    return r.ok ? { ok: true as const } : { ok: false as const, error: r.error }
+  }
   try {
-    await apiPostJson(`/tasks/${encodeURIComponent(input.taskId)}/review`, input)
+    await apiPostJson(`/tasks/${encodeURIComponent(input.taskId)}/review`, {
+      decision: input.decision,
+      comment: input.comment,
+    })
     void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
     return { ok: true as const }
   } catch (e) {
     return mapLiveFailure(e)
   }
+}
+
+export async function portalUpdateCompany(
+  id: string,
+  body: { name: string; notes?: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isLiveApi()) {
+    const r = updateCompany(id, body.name, body.notes ?? '')
+    return r.ok ? { ok: true } : { ok: false, error: r.error }
+  }
+  try {
+    await apiPatchJson(`/companies/${encodeURIComponent(id)}`, body)
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    return { ok: true }
+  } catch (e) {
+    return mapLiveFailure(e)
+  }
+}
+
+export async function portalUpdateSite(
+  id: string,
+  body: { companyId: string; name: string; location: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isLiveApi()) {
+    const r = updateSite(id, body)
+    return r.ok ? { ok: true } : { ok: false, error: r.error }
+  }
+  try {
+    await apiPatchJson(`/sites/${encodeURIComponent(id)}`, body)
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    return { ok: true }
+  } catch (e) {
+    return mapLiveFailure(e)
+  }
+}
+
+export async function portalUpdateSupplier(
+  id: string,
+  body: {
+    name: string
+    contactName: string
+    email: string
+    phone: string
+    address: string
+    notes: string
+  },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isLiveApi()) {
+    const r = updateSupplier(id, body)
+    return r.ok ? { ok: true } : { ok: false, error: r.error }
+  }
+  try {
+    await apiPatchJson(`/suppliers/${encodeURIComponent(id)}`, body)
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    return { ok: true }
+  } catch (e) {
+    return mapLiveFailure(e)
+  }
+}
+
+export async function portalUpdateNetworkDevice(
+  id: string,
+  body: Partial<{
+    type: string
+    details: string
+    brand: string
+    model: string
+    serialNumber: string
+    location: string
+  }>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isLiveApi()) {
+    const r = updateNetworkDevice(id, body)
+    return r.ok ? { ok: true } : { ok: false, error: r.error }
+  }
+  try {
+    await apiPatchJson(`/network-devices/${encodeURIComponent(id)}`, body)
+    void queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
+    return { ok: true }
+  } catch (e) {
+    return mapLiveFailure(e)
+  }
+}
+
+export async function portalUpdateServiceDeskTicket(
+  id: string,
+  patch: Partial<Ticket>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (isLiveApi()) {
+    return {
+      ok: false,
+      error: 'Service desk tickets are stored client-side only. Unset VITE_API_BASE_URL in dev to edit them.',
+    }
+  }
+  const r = updateServiceDeskTicket(id, patch)
+  return r.ok ? { ok: true } : { ok: false, error: r.error }
+}
+
+export async function portalUpdateInventoryAsset(
+  id: string,
+  patch: Partial<AssetRow>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (isLiveApi()) {
+    return {
+      ok: false,
+      error: 'IT assets are stored client-side only. Unset VITE_API_BASE_URL in dev to edit them.',
+    }
+  }
+  const r = updateInventoryAsset(id, patch)
+  return r.ok ? { ok: true } : { ok: false, error: r.error }
 }

@@ -133,6 +133,16 @@ export async function insertStorageUnit(
     if (String(per.siteId) !== siteId) {
       throw Object.assign(new Error('Personnel must belong to the selected site.'), { statusCode: 400 })
     }
+    const [[existingCustody]] = await pool.query<RowDataPacket[]>(
+      'SELECT id FROM storage_units WHERE personnel_id = ? AND kind = ? LIMIT 1',
+      [personnelId, 'custody'],
+    )
+    if (existingCustody) {
+      throw Object.assign(
+        new Error('This person already has a custody storage unit. Edit the existing bin or pick a different holder.'),
+        { statusCode: 409 },
+      )
+    }
   } else {
     personnelId = null
   }
@@ -263,4 +273,100 @@ export async function replaceUserPermissions(
   } finally {
     conn.release()
   }
+}
+
+export async function updateCompany(
+  pool: Pool,
+  id: string,
+  input: { name: string; notes?: string },
+): Promise<{ ok: true; company: Record<string, unknown> } | { ok: false; error: string }> {
+  const [[row]] = await pool.query<RowDataPacket[]>('SELECT id FROM companies WHERE id = ?', [id])
+  if (!row) return { ok: false, error: 'Company not found.' }
+  const name = input.name.trim()
+  if (!name) return { ok: false, error: 'Name is required.' }
+  const notes = (input.notes ?? '').trim()
+  await pool.query('UPDATE companies SET name = ?, notes = ? WHERE id = ?', [name, notes, id])
+  return { ok: true, company: { id, name, notes } }
+}
+
+export async function updateSite(
+  pool: Pool,
+  id: string,
+  input: { companyId: string; name: string; location?: string },
+): Promise<{ ok: true; site: Record<string, unknown> } | { ok: false; error: string }> {
+  const [[s]] = await pool.query<RowDataPacket[]>('SELECT id, company_id AS companyId FROM sites WHERE id = ?', [id])
+  if (!s) return { ok: false, error: 'Site not found.' }
+  const [[co]] = await pool.query<RowDataPacket[]>('SELECT id FROM companies WHERE id = ?', [input.companyId])
+  if (!co) return { ok: false, error: 'Company not found.' }
+  const name = input.name.trim()
+  if (!name) return { ok: false, error: 'Site name is required.' }
+  const location = (input.location ?? '').trim()
+  await pool.query('UPDATE sites SET company_id = ?, name = ?, location = ? WHERE id = ?', [
+    input.companyId,
+    name,
+    location,
+    id,
+  ])
+  return { ok: true, site: { id, companyId: input.companyId, name, location } }
+}
+
+export async function updateSupplier(
+  pool: Pool,
+  id: string,
+  input: {
+    name: string
+    contactName?: string
+    email?: string
+    phone?: string
+    address?: string
+    notes?: string
+  },
+): Promise<{ ok: true; supplier: Record<string, unknown> } | { ok: false; error: string }> {
+  const [[row]] = await pool.query<RowDataPacket[]>('SELECT id FROM suppliers WHERE id = ?', [id])
+  if (!row) return { ok: false, error: 'Supplier not found.' }
+  const name = input.name.trim()
+  if (!name) return { ok: false, error: 'Supplier name is required.' }
+  const contactName = (input.contactName ?? '').trim()
+  const email = (input.email ?? '').trim()
+  const phone = (input.phone ?? '').trim()
+  const address = (input.address ?? '').trim()
+  const notes = (input.notes ?? '').trim()
+  await pool.query(
+    'UPDATE suppliers SET name = ?, contact_name = ?, email = ?, phone = ?, address = ?, notes = ? WHERE id = ?',
+    [name, contactName, email, phone, address, notes, id],
+  )
+  return {
+    ok: true,
+    supplier: { id, name, contactName, email, phone, address, notes },
+  }
+}
+
+export async function updateNetworkDevice(
+  pool: Pool,
+  id: string,
+  input: {
+    type?: string
+    details?: string
+    brand?: string
+    model?: string
+    serialNumber?: string
+    location?: string
+  },
+): Promise<{ ok: true; device: Record<string, unknown> } | { ok: false; error: string }> {
+  const [[row]] = await pool.query<RowDataPacket[]>(
+    'SELECT id, type, details, brand, model, serial_number AS serialNumber, location FROM network_devices WHERE id = ?',
+    [id],
+  )
+  if (!row) return { ok: false, error: 'Device not found.' }
+  const type = (input.type ?? row.type ?? '').toString().trim() || String(row.type)
+  const details = (input.details ?? row.details ?? '').toString().trim() || String(row.details)
+  const brand = (input.brand ?? row.brand ?? '').toString().trim() || String(row.brand)
+  const model = (input.model ?? row.model ?? '').toString().trim() || String(row.model)
+  const serialNumber = (input.serialNumber ?? row.serialNumber ?? '').toString().trim() || String(row.serialNumber)
+  const location = (input.location ?? row.location ?? '').toString().trim() || String(row.location)
+  await pool.query(
+    'UPDATE network_devices SET type = ?, details = ?, brand = ?, model = ?, serial_number = ?, location = ? WHERE id = ?',
+    [type, details, brand, model, serialNumber, location, id],
+  )
+  return { ok: true, device: { id, type, details, brand, model, serialNumber, location } }
 }

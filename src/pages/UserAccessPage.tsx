@@ -9,12 +9,9 @@ import type { PageCrud, PageKey } from '@/mocks/domain/types'
 
 export function UserAccessPage() {
   const { userId = '' } = useParams()
-  const snap = useMockStore() as unknown as {
-    users: Array<{ id: string; displayName: string; roleIds?: string[]; permissions: Record<PageKey, PageCrud> }>
-    roles?: Array<{ id: string; name: string }>
-  }
+  const snap = useMockStore()
   const user = snap.users.find((u) => u.id === userId)
-  const roles = snap.roles ?? []
+  const roles = snap.roles
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>(user?.roleIds ?? [])
   const [overrides, setOverrides] = useState<Record<PageKey, PageCrud>>(user?.permissions ?? ({} as Record<PageKey, PageCrud>))
   const [msg, setMsg] = useState('')

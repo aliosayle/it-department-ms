@@ -1,10 +1,8 @@
 import type { PortalGridPageConfig } from '@/components/grid/portalGridTypes'
 import type { AssetRow, Ticket } from '@/mocks/types'
-import { assetsMock, ticketsMock } from '@/mocks'
 
-/** Service desk — edit columns here only. */
+/** Service desk — pass `dataSource` from `useMockStore().serviceDeskTickets`. */
 export const serviceDeskGridPageConfig: PortalGridPageConfig<Ticket> = {
-  dataSource: ticketsMock,
   keyExpr: 'id',
   columns: [
     { dataField: 'id', caption: 'ID', width: 120 },
@@ -21,9 +19,8 @@ export const serviceDeskGridPageConfig: PortalGridPageConfig<Ticket> = {
   ],
 }
 
-/** Asset register — edit columns here only. */
+/** Asset register — pass `dataSource` from `useMockStore().inventoryAssets`. */
 export const assetsGridPageConfig: PortalGridPageConfig<AssetRow> = {
-  dataSource: assetsMock,
   keyExpr: 'id',
   columns: [
     { dataField: 'id', caption: 'Asset ID', width: 120 },

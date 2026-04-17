@@ -26,13 +26,7 @@ export function SuppliersListPage() {
           displayTime: 5000,
         })
       },
-      onEdit: () => {
-        notify({
-          message: 'Supplier edit forms are not wired in this build — use Add supplier or the API.',
-          type: 'warning',
-          displayTime: 4000,
-        })
-      },
+      getEditHref: (r) => `/master-data/suppliers/${encodeURIComponent(r.id)}/edit`,
     }),
     [perm.view, perm.edit, perm.delete],
   )

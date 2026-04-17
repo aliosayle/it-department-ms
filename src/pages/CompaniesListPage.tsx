@@ -22,13 +22,7 @@ export function CompaniesListPage() {
         const body = `${String(r.name)}\n${String(r.notes ?? '')}`.trim()
         notify({ message: body || String(r.name), type: 'info', displayTime: 5000 })
       },
-      onEdit: () => {
-        notify({
-          message: 'Company edit forms are not wired in this build — use Add company or the API.',
-          type: 'warning',
-          displayTime: 4000,
-        })
-      },
+      getEditHref: (r) => `/master-data/companies/${encodeURIComponent(r.id)}/edit`,
     }),
     [perm.view, perm.edit, perm.delete],
   )

@@ -79,6 +79,30 @@ const patternTitles: { pattern: string; meta: PageMeta }[] = [
     pattern: '/purchases/:purchaseId',
     meta: { title: 'Purchase detail', subtitle: 'Bon, supplier, receive into stock' },
   },
+  {
+    pattern: '/service-desk/:ticketId/edit',
+    meta: { title: 'Edit ticket', subtitle: 'Service desk' },
+  },
+  {
+    pattern: '/assets/:assetId/edit',
+    meta: { title: 'Edit asset', subtitle: 'Asset register' },
+  },
+  {
+    pattern: '/master-data/companies/:companyId/edit',
+    meta: { title: 'Edit company', subtitle: 'Master data' },
+  },
+  {
+    pattern: '/master-data/sites/:siteId/edit',
+    meta: { title: 'Edit site', subtitle: 'Master data' },
+  },
+  {
+    pattern: '/master-data/suppliers/:supplierId/edit',
+    meta: { title: 'Edit supplier', subtitle: 'Master data' },
+  },
+  {
+    pattern: '/inventory/network/:deviceId/edit',
+    meta: { title: 'Edit network device', subtitle: 'Infrastructure inventory' },
+  },
 ]
 
 const notFoundMeta: PageMeta = {

@@ -81,10 +81,27 @@ export async function replaceUserRolesAndOverrides(
 export async function createTask(pool: Pool, input: { title: string; description?: string; assignedToUserId: string; reviewerUserId?: string | null; dueDate?: string | null; createdByUserId: string }) {
   const title = input.title.trim()
   if (!title) return { ok: false as const, error: 'Title is required.' }
+  const assignee = (input.assignedToUserId || '').trim()
+  if (!assignee) return { ok: false as const, error: 'Assignee is required.' }
+  const [[assigneeRow]] = await pool.query<RowDataPacket[]>('SELECT id FROM portal_users WHERE id = ?', [assignee])
+  if (!assigneeRow) return { ok: false as const, error: 'Assignee user not found.' }
+  const [[creatorRow]] = await pool.query<RowDataPacket[]>('SELECT id FROM portal_users WHERE id = ?', [
+    input.createdByUserId,
+  ])
+  if (!creatorRow) return { ok: false as const, error: 'Created-by user not found.' }
+  let reviewer: string | null = input.reviewerUserId != null && String(input.reviewerUserId).trim() !== ''
+    ? String(input.reviewerUserId).trim()
+    : null
+  if (reviewer) {
+    const [[revRow]] = await pool.query<RowDataPacket[]>('SELECT id FROM portal_users WHERE id = ?', [reviewer])
+    if (!revRow) return { ok: false as const, error: 'Reviewer user not found.' }
+  } else {
+    reviewer = null
+  }
   const id = nextId('tsk')
   await pool.query(
     'INSERT INTO tasks (id, title, description, created_by_user_id, assigned_to_user_id, reviewer_user_id, due_date) VALUES (?,?,?,?,?,?,?)',
-    [id, title, input.description ?? '', input.createdByUserId, input.assignedToUserId, input.reviewerUserId ?? null, input.dueDate ?? null],
+    [id, title, input.description ?? '', input.createdByUserId, assignee, reviewer, input.dueDate ?? null],
   )
   return { ok: true as const, taskId: id }
 }

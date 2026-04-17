@@ -4,30 +4,15 @@ import { apiBaseUrl, isLiveApi } from '@/api/config'
 import { PORTAL_AUTH_CHANGED_EVENT, getAccessToken } from '@/api/session'
 import { queryClient } from '@/lib/queryClient'
 import {
+  emptyStore,
   getMockStoreSnapshot,
+  normalizeBootstrapState,
   setLiveSnapshot,
   subscribeMockStore,
   type StoreState,
 } from './mockStore'
 
-const emptySnapshot: StoreState = {
-  companies: [],
-  sites: [],
-  personnel: [],
-  storageUnits: [],
-  products: [],
-  stockPositions: [],
-  productMovements: [],
-  productReports: [],
-  assignments: [],
-  serializedAssets: [],
-  userEquipment: [],
-  networkDevices: [],
-  users: [],
-  suppliers: [],
-  purchases: [],
-  purchaseLines: [],
-}
+const emptySnapshot: StoreState = emptyStore()
 
 async function fetchBootstrap(): Promise<StoreState> {
   const base = apiBaseUrl()
@@ -39,7 +24,8 @@ async function fetchBootstrap(): Promise<StoreState> {
     const t = await res.text()
     throw new Error(t || res.statusText)
   }
-  return res.json() as Promise<StoreState>
+  const raw = (await res.json()) as Partial<StoreState>
+  return normalizeBootstrapState(raw)
 }
 
 /** Subscribes to in-memory mock store, or to API bootstrap when `VITE_API_BASE_URL` is set. */

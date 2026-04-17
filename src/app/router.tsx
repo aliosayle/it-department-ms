@@ -3,12 +3,15 @@ import { PageGuard } from '@/auth/PageGuard'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { WaitForSession } from '@/auth/WaitForSession'
 import { AppShell } from '@/layout/AppShell'
+import { AssetEditPage } from '@/pages/AssetEditPage'
 import { AssetsPage } from '@/pages/AssetsPage'
 import { CompaniesListPage } from '@/pages/CompaniesListPage'
+import { CompanyEditPage } from '@/pages/CompanyEditPage'
 import { CompanyNewPage } from '@/pages/CompanyNewPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { AssignmentListPage } from '@/pages/AssignmentListPage'
 import { AssignmentNewPage } from '@/pages/AssignmentNewPage'
+import { NetworkDeviceEditPage } from '@/pages/NetworkDeviceEditPage'
 import { NetworkDevicesPage } from '@/pages/NetworkDevicesPage'
 import { AccessDeniedPage } from '@/auth/AccessDeniedPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -27,8 +30,11 @@ import { PurchaseDetailPage } from '@/pages/PurchaseDetailPage'
 import { PurchaseNewPage } from '@/pages/PurchaseNewPage'
 import { PurchasesListPage } from '@/pages/PurchasesListPage'
 import { ServiceDeskPage } from '@/pages/ServiceDeskPage'
+import { ServiceDeskTicketEditPage } from '@/pages/ServiceDeskTicketEditPage'
+import { SiteEditPage } from '@/pages/SiteEditPage'
 import { SiteNewPage } from '@/pages/SiteNewPage'
 import { SitesListPage } from '@/pages/SitesListPage'
+import { SupplierEditPage } from '@/pages/SupplierEditPage'
 import { SupplierNewPage } from '@/pages/SupplierNewPage'
 import { SuppliersListPage } from '@/pages/SuppliersListPage'
 import { StockListPage } from '@/pages/StockListPage'
@@ -71,10 +77,26 @@ export function AppRoutes() {
           }
         />
         <Route
+          path="service-desk/:ticketId/edit"
+          element={
+            <PageGuard page="serviceDesk" require="edit">
+              <ServiceDeskTicketEditPage />
+            </PageGuard>
+          }
+        />
+        <Route
           path="assets"
           element={
             <PageGuard page="assets">
               <AssetsPage />
+            </PageGuard>
+          }
+        />
+        <Route
+          path="assets/:assetId/edit"
+          element={
+            <PageGuard page="assets" require="edit">
+              <AssetEditPage />
             </PageGuard>
           }
         />
@@ -214,6 +236,14 @@ export function AppRoutes() {
           }
         />
         <Route
+          path="master-data/suppliers/:supplierId/edit"
+          element={
+            <PageGuard page="suppliers" require="edit">
+              <SupplierEditPage />
+            </PageGuard>
+          }
+        />
+        <Route
           path="master-data/companies"
           element={
             <PageGuard page="companies">
@@ -230,6 +260,14 @@ export function AppRoutes() {
           }
         />
         <Route
+          path="master-data/companies/:companyId/edit"
+          element={
+            <PageGuard page="companies" require="edit">
+              <CompanyEditPage />
+            </PageGuard>
+          }
+        />
+        <Route
           path="master-data/sites"
           element={
             <PageGuard page="sites">
@@ -242,6 +280,14 @@ export function AppRoutes() {
           element={
             <PageGuard page="sites">
               <SiteNewPage />
+            </PageGuard>
+          }
+        />
+        <Route
+          path="master-data/sites/:siteId/edit"
+          element={
+            <PageGuard page="sites" require="edit">
+              <SiteEditPage />
             </PageGuard>
           }
         />
@@ -282,6 +328,14 @@ export function AppRoutes() {
           element={
             <PageGuard page="network">
               <NetworkDevicesPage />
+            </PageGuard>
+          }
+        />
+        <Route
+          path="inventory/network/:deviceId/edit"
+          element={
+            <PageGuard page="network" require="edit">
+              <NetworkDeviceEditPage />
             </PageGuard>
           }
         />

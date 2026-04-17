@@ -36,13 +36,7 @@ export function SitesListPage() {
           displayTime: 5000,
         })
       },
-      onEdit: () => {
-        notify({
-          message: 'Site edit forms are not wired in this build — use Add site or the API.',
-          type: 'warning',
-          displayTime: 4000,
-        })
-      },
+      getEditHref: (r) => `/master-data/sites/${encodeURIComponent(r.id)}/edit`,
     }),
     [perm.view, perm.edit, perm.delete],
   )

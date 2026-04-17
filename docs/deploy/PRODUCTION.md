@@ -28,7 +28,24 @@ This matches the v1 plan: **nginx** serves the Vite build and proxies **`/api/`*
    sudo nginx -t && sudo systemctl reload nginx
    ```
 
-**Verify:** `ls /var/www/it-department-portal/index.html` and `grep root /etc/nginx/sites-enabled/it-department-portal.conf` — the `root` path must contain that `index.html`.
+**Verify:** `grep root /etc/nginx/sites-enabled/it-department-portal.conf` — the `root` directory must contain `index.html` from your last **`npm run build`**.
+
+**If `root` is your clone (e.g. `root /home/you/it-department-ms/dist;`):** nginx reads **`dist/` in the repo** directly. Running **`npm run build`** in that clone **is** the SPA deploy; **`/var/www/...`** may exist from an old script but is **ignored** unless you change `root` back. After `git pull && npm run build`, confirm:
+
+```bash
+ls -la /home/you/it-department-ms/dist/index.html
+curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1/
+```
+
+If you still get **404** (or **403**), nginx (user **`www-data`**) must be able to **traverse** every directory from `/` down to **`dist`**. Typical fix on Ubuntu:
+
+```bash
+chmod o+x /home/you
+chmod o+x /home/you/it-department-ms
+# files under dist should be world-readable from a normal npm build
+ls -la /home/you/it-department-ms/dist/index.html
+sudo tail -30 /var/log/nginx/error.log
+```
 
 ## 1. Database and portal bootstrap user
 
